@@ -9,7 +9,7 @@ import { currentPermission, requestNotificationPermission, fireNotification } fr
 
 export const Route = createFileRoute("/voce")({
   head: () => ({ meta: [{ title: "Você — LevelUp" }] }),
-  component: Voce;
+  component: Voce,
 });
 
 function Voce() {
