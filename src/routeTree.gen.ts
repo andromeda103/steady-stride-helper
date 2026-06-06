@@ -9,8 +9,32 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VoceRouteImport } from './routes/voce'
+import { Route as RotinaRouteImport } from './routes/rotina'
+import { Route as EstudosRouteImport } from './routes/estudos'
+import { Route as CorpoRouteImport } from './routes/corpo'
 import { Route as IndexRouteImport } from './routes/index'
 
+const VoceRoute = VoceRouteImport.update({
+  id: '/voce',
+  path: '/voce',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RotinaRoute = RotinaRouteImport.update({
+  id: '/rotina',
+  path: '/rotina',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstudosRoute = EstudosRouteImport.update({
+  id: '/estudos',
+  path: '/estudos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CorpoRoute = CorpoRouteImport.update({
+  id: '/corpo',
+  path: '/corpo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +43,72 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
+  '/estudos': typeof EstudosRoute
+  '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
+  '/estudos': typeof EstudosRoute
+  '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
+  '/estudos': typeof EstudosRoute
+  '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
+  id: '__root__' | '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CorpoRoute: typeof CorpoRoute
+  EstudosRoute: typeof EstudosRoute
+  RotinaRoute: typeof RotinaRoute
+  VoceRoute: typeof VoceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/voce': {
+      id: '/voce'
+      path: '/voce'
+      fullPath: '/voce'
+      preLoaderRoute: typeof VoceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rotina': {
+      id: '/rotina'
+      path: '/rotina'
+      fullPath: '/rotina'
+      preLoaderRoute: typeof RotinaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estudos': {
+      id: '/estudos'
+      path: '/estudos'
+      fullPath: '/estudos'
+      preLoaderRoute: typeof EstudosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/corpo': {
+      id: '/corpo'
+      path: '/corpo'
+      fullPath: '/corpo'
+      preLoaderRoute: typeof CorpoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +121,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CorpoRoute: CorpoRoute,
+  EstudosRoute: EstudosRoute,
+  RotinaRoute: RotinaRoute,
+  VoceRoute: VoceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
