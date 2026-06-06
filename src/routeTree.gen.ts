@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VoceRouteImport } from './routes/voce'
 import { Route as RotinaRouteImport } from './routes/rotina'
 import { Route as EstudosRouteImport } from './routes/estudos'
 import { Route as CorpoRouteImport } from './routes/corpo'
 import { Route as IndexRouteImport } from './routes/index'
 
+const VoceRoute = VoceRouteImport.update({
+  id: '/voce',
+  path: '/voce',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RotinaRoute = RotinaRouteImport.update({
   id: '/rotina',
   path: '/rotina',
@@ -40,12 +46,14 @@ export interface FileRoutesByFullPath {
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
+  '/voce': typeof VoceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/corpo' | '/estudos' | '/rotina'
+  fullPaths: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/corpo' | '/estudos' | '/rotina'
-  id: '__root__' | '/' | '/corpo' | '/estudos' | '/rotina'
+  to: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
+  id: '__root__' | '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,10 +76,18 @@ export interface RootRouteChildren {
   CorpoRoute: typeof CorpoRoute
   EstudosRoute: typeof EstudosRoute
   RotinaRoute: typeof RotinaRoute
+  VoceRoute: typeof VoceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/voce': {
+      id: '/voce'
+      path: '/voce'
+      fullPath: '/voce'
+      preLoaderRoute: typeof VoceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rotina': {
       id: '/rotina'
       path: '/rotina'
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   CorpoRoute: CorpoRoute,
   EstudosRoute: EstudosRoute,
   RotinaRoute: RotinaRoute,
+  VoceRoute: VoceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
