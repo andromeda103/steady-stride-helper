@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RotinaRouteImport } from './routes/rotina'
 import { Route as EstudosRouteImport } from './routes/estudos'
+import { Route as CorpoRouteImport } from './routes/corpo'
 import { Route as IndexRouteImport } from './routes/index'
 
 const RotinaRoute = RotinaRouteImport.update({
@@ -23,6 +24,11 @@ const EstudosRoute = EstudosRouteImport.update({
   path: '/estudos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CorpoRoute = CorpoRouteImport.update({
+  id: '/corpo',
+  path: '/corpo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +37,34 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/rotina': typeof RotinaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/estudos' | '/rotina'
+  fullPaths: '/' | '/corpo' | '/estudos' | '/rotina'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/estudos' | '/rotina'
-  id: '__root__' | '/' | '/estudos' | '/rotina'
+  to: '/' | '/corpo' | '/estudos' | '/rotina'
+  id: '__root__' | '/' | '/corpo' | '/estudos' | '/rotina'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CorpoRoute: typeof CorpoRoute
   EstudosRoute: typeof EstudosRoute
   RotinaRoute: typeof RotinaRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EstudosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/corpo': {
+      id: '/corpo'
+      path: '/corpo'
+      fullPath: '/corpo'
+      preLoaderRoute: typeof CorpoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CorpoRoute: CorpoRoute,
   EstudosRoute: EstudosRoute,
   RotinaRoute: RotinaRoute,
 }
