@@ -1,11 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Bell, BellRing, Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useRef } from "react";
+import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useStore, levelInfo, isDoneToday } from "@/lib/store";
+import { useStore, levelInfo, isDoneToday, type DarkMode } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
-import { currentPermission, requestNotificationPermission, fireNotification } from "@/lib/notify";
+import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
+import { exportBackup, importBackup } from "@/lib/backup";
 
 export const Route = createFileRoute("/voce")({
   head: () => ({ meta: [{ title: "Você — LevelUp" }] }),
