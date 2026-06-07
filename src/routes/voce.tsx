@@ -21,7 +21,9 @@ function Voce() {
   const workoutLog = useStore((s) => s.workoutLog);
   const diet = useStore((s) => s.diet);
   const history = useStore((s) => s.history);
-  const setNotifPermission = useStore((s) => s.setNotifPermission);
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const lvl = levelInfo(xp);
   const today = todayKey();
@@ -42,28 +44,25 @@ function Voce() {
       ? "Você começou — e começar já é vitória."
       : "Ainda dá tempo. Comece com uma coisa só.";
 
-  // notifications
-  const [perm, setPerm] = useState<string>("default");
-  useEffect(() => {
-    const p = currentPermission();
-    setPerm(p);
-    if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
-  }, [setNotifPermission]);
+  const DARK_MODES: { id: DarkMode; label: string }[] = [
+    { id: "default", label: "Dark padrão" },
+    { id: "amoled", label: "Dark AMOLED" },
+    { id: "gray", label: "Dark cinza" },
+  ];
 
-  async function ask() {
-    const r = await requestNotificationPermission();
-    setPerm(r);
-    if (r === "granted") {
-      setNotifPermission("granted");
-      fireNotification("Notificações ativadas!", "Vou te lembrar das tarefas no horário.");
-    } else if (r === "denied") {
-      toast("Permissão negada", { description: "Ative nas configurações do navegador/celular." });
+  async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      await importBackup(f);
+      toast("Backup importado", { description: "Seus dados foram restaurados." });
+    } catch {
+      toast("Falha ao importar", { description: "Arquivo de backup inválido." });
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  const permLabel =
-    perm === "granted" ? "Ativadas" : perm === "denied" ? "Bloqueadas" : perm === "unsupported" ? "Não suportadas" : "Não solicitadas";
-  const permColor = perm === "granted" ? "var(--primary)" : perm === "denied" ? "var(--danger)" : "var(--warning)";
 
   return (
     <main className="px-4 pt-6">
