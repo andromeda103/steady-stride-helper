@@ -96,6 +96,62 @@ export interface FocusSession {
   endsAt: number; // epoch ms
 }
 
+export type DarkMode = "default" | "amoled" | "gray";
+
+export interface Settings {
+  primaryColor: string; // oklch/hex applied to --primary
+  secondaryColor: string; // accent used in highlights
+  darkMode: DarkMode;
+}
+
+export interface WeightEntry {
+  id: string;
+  date: string;
+  kg: number;
+}
+
+export interface SleepEntry {
+  id: string;
+  date: string;
+  bed: string; // HH:mm
+  wake: string; // HH:mm
+  hours: number;
+}
+
+export type NotifKind =
+  | "permission"
+  | "sent"
+  | "received"
+  | "error"
+  | "scheduled"
+  | "cancelled";
+
+export interface NotifEvent {
+  id: string;
+  at: number; // epoch ms
+  kind: NotifKind;
+  title: string;
+  detail?: string;
+}
+
+export interface ScheduledNotif {
+  id: string;
+  fireAt: number; // epoch ms
+  title: string;
+  body: string;
+}
+
+export interface Mission {
+  taskId: string;
+  date: string;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  primaryColor: "oklch(0.78 0.17 152)",
+  secondaryColor: "oklch(0.7 0.16 250)",
+  darkMode: "default",
+};
+
 interface State {
   tasks: Task[];
   habits: Habit[];
@@ -119,6 +175,17 @@ interface State {
   focus: FocusSession | null;
   notifPermission: NotificationPermission | "default";
   lastReminderAt: Record<string, number>; // taskId -> epoch ms
+
+  // new slices
+  settings: Settings;
+  mission: Mission | null;
+  subjectGoals: Record<string, number>; // subjectId -> planned hours/week
+  weights: WeightEntry[];
+  weightGoal: number;
+  sleeps: SleepEntry[];
+  notifLog: NotifEvent[];
+  scheduled: ScheduledNotif[];
+  lastActiveAt: number;
 
   // actions
   toggleTask: (id: string) => void;
@@ -147,6 +214,21 @@ interface State {
   setNotifPermission: (p: NotificationPermission) => void;
   markReminded: (taskId: string) => void;
   addXp: (n: number) => void;
+
+  // new actions
+  setSettings: (patch: Partial<Settings>) => void;
+  setMission: (taskId: string | null) => void;
+  setSubjectGoal: (subjectId: string, hours: number) => void;
+  addWeight: (kg: number) => void;
+  deleteWeight: (id: string) => void;
+  setWeightGoal: (kg: number) => void;
+  addSleep: (bed: string, wake: string) => void;
+  deleteSleep: (id: string) => void;
+  logNotif: (kind: NotifKind, title: string, detail?: string) => void;
+  clearNotifLog: () => void;
+  addScheduled: (s: ScheduledNotif) => void;
+  removeScheduled: (id: string) => void;
+  touchActive: () => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -209,6 +291,16 @@ export const useStore = create<State>()(
       focus: null,
       notifPermission: "default",
       lastReminderAt: {},
+
+      settings: DEFAULT_SETTINGS,
+      mission: null,
+      subjectGoals: {},
+      weights: [],
+      weightGoal: 0,
+      sleeps: [],
+      notifLog: [],
+      scheduled: [],
+      lastActiveAt: Date.now(),
 
       toggleTask: (id) =>
         set((s) => {
@@ -323,10 +415,69 @@ export const useStore = create<State>()(
       markReminded: (taskId) =>
         set((s) => ({ lastReminderAt: { ...s.lastReminderAt, [taskId]: Date.now() } })),
       addXp: (n) => set((s) => ({ xp: Math.max(0, s.xp + n) })),
+
+      setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      setMission: (taskId) =>
+        set(() => ({ mission: taskId ? { taskId, date: todayKey() } : null })),
+
+      setSubjectGoal: (subjectId, hours) =>
+        set((s) => ({ subjectGoals: { ...s.subjectGoals, [subjectId]: Math.max(0, hours) } })),
+
+      addWeight: (kg) =>
+        set((s) => {
+          const today = todayKey();
+          const rest = s.weights.filter((w) => w.date !== today);
+          return {
+            weights: [...rest, { id: uid(), date: today, kg }].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
+      deleteWeight: (id) => set((s) => ({ weights: s.weights.filter((w) => w.id !== id) })),
+      setWeightGoal: (kg) => set({ weightGoal: Math.max(0, kg) }),
+
+      addSleep: (bed, wake) =>
+        set((s) => {
+          const bm = bed.split(":").map(Number);
+          const wm = wake.split(":").map(Number);
+          const bedMin = (bm[0] || 0) * 60 + (bm[1] || 0);
+          const wakeMin = (wm[0] || 0) * 60 + (wm[1] || 0);
+          const hours = Math.round((((wakeMin - bedMin + 1440) % 1440) / 60) * 10) / 10;
+          const today = todayKey();
+          const rest = s.sleeps.filter((x) => x.date !== today);
+          return {
+            sleeps: [...rest, { id: uid(), date: today, bed, wake, hours }].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
+      deleteSleep: (id) => set((s) => ({ sleeps: s.sleeps.filter((x) => x.id !== id) })),
+
+      logNotif: (kind, title, detail) =>
+        set((s) => ({
+          notifLog: [{ id: uid(), at: Date.now(), kind, title, detail }, ...s.notifLog].slice(0, 60),
+        })),
+      clearNotifLog: () => set({ notifLog: [] }),
+      addScheduled: (sc) => set((s) => ({ scheduled: [...s.scheduled, sc] })),
+      removeScheduled: (id) => set((s) => ({ scheduled: s.scheduled.filter((x) => x.id !== id) })),
+
+      touchActive: () => set({ lastActiveAt: Date.now() }),
     }),
     {
       name: "levelup-store",
-      version: 1,
+      version: 2,
+      migrate: (persisted: unknown, version: number) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        if (version < 2) {
+          if (!state.settings) state.settings = DEFAULT_SETTINGS;
+          if (!state.mission) state.mission = null;
+          if (!state.subjectGoals) state.subjectGoals = {};
+          if (!state.weights) state.weights = [];
+          if (state.weightGoal == null) state.weightGoal = 0;
+          if (!state.sleeps) state.sleeps = [];
+          if (!state.notifLog) state.notifLog = [];
+          if (!state.scheduled) state.scheduled = [];
+          if (state.lastActiveAt == null) state.lastActiveAt = Date.now();
+        }
+        return state as unknown as State;
+      },
     },
   ),
 );

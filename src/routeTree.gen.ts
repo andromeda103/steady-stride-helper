@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VoceRouteImport } from './routes/voce'
 import { Route as RotinaRouteImport } from './routes/rotina'
+import { Route as NotificacoesRouteImport } from './routes/notificacoes'
 import { Route as EstudosRouteImport } from './routes/estudos'
 import { Route as CorpoRouteImport } from './routes/corpo'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const VoceRoute = VoceRouteImport.update({
 const RotinaRoute = RotinaRouteImport.update({
   id: '/rotina',
   path: '/rotina',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificacoesRoute = NotificacoesRouteImport.update({
+  id: '/notificacoes',
+  path: '/notificacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EstudosRoute = EstudosRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/rotina': typeof RotinaRoute
   '/voce': typeof VoceRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/rotina': typeof RotinaRoute
   '/voce': typeof VoceRoute
 }
@@ -60,21 +68,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/rotina': typeof RotinaRoute
   '/voce': typeof VoceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
+  fullPaths: '/' | '/corpo' | '/estudos' | '/notificacoes' | '/rotina' | '/voce'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
-  id: '__root__' | '/' | '/corpo' | '/estudos' | '/rotina' | '/voce'
+  to: '/' | '/corpo' | '/estudos' | '/notificacoes' | '/rotina' | '/voce'
+  id:
+    | '__root__'
+    | '/'
+    | '/corpo'
+    | '/estudos'
+    | '/notificacoes'
+    | '/rotina'
+    | '/voce'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CorpoRoute: typeof CorpoRoute
   EstudosRoute: typeof EstudosRoute
+  NotificacoesRoute: typeof NotificacoesRoute
   RotinaRoute: typeof RotinaRoute
   VoceRoute: typeof VoceRoute
 }
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/rotina'
       fullPath: '/rotina'
       preLoaderRoute: typeof RotinaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notificacoes': {
+      id: '/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/notificacoes'
+      preLoaderRoute: typeof NotificacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/estudos': {
@@ -123,19 +147,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CorpoRoute: CorpoRoute,
   EstudosRoute: EstudosRoute,
+  NotificacoesRoute: NotificacoesRoute,
   RotinaRoute: RotinaRoute,
   VoceRoute: VoceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

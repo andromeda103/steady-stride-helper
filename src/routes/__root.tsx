@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BottomNav } from "../components/BottomNav";
 import { Reminders } from "../components/Reminders";
+import { ThemeApplier } from "../components/ThemeApplier";
 import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
@@ -127,6 +128,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeApplier />
       <Reminders />
       <div className="mx-auto min-h-screen max-w-md bg-background pb-20">
         <Outlet />

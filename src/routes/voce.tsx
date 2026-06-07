@@ -1,11 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Bell, BellRing, Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useRef } from "react";
+import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useStore, levelInfo, isDoneToday } from "@/lib/store";
+import { useStore, levelInfo, isDoneToday, type DarkMode } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
-import { currentPermission, requestNotificationPermission, fireNotification } from "@/lib/notify";
+import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
+import { exportBackup, importBackup } from "@/lib/backup";
 
 export const Route = createFileRoute("/voce")({
   head: () => ({ meta: [{ title: "Você — LevelUp" }] }),
@@ -20,7 +21,9 @@ function Voce() {
   const workoutLog = useStore((s) => s.workoutLog);
   const diet = useStore((s) => s.diet);
   const history = useStore((s) => s.history);
-  const setNotifPermission = useStore((s) => s.setNotifPermission);
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const lvl = levelInfo(xp);
   const today = todayKey();
@@ -41,28 +44,25 @@ function Voce() {
       ? "Você começou — e começar já é vitória."
       : "Ainda dá tempo. Comece com uma coisa só.";
 
-  // notifications
-  const [perm, setPerm] = useState<string>("default");
-  useEffect(() => {
-    const p = currentPermission();
-    setPerm(p);
-    if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
-  }, [setNotifPermission]);
+  const DARK_MODES: { id: DarkMode; label: string }[] = [
+    { id: "default", label: "Dark padrão" },
+    { id: "amoled", label: "Dark AMOLED" },
+    { id: "gray", label: "Dark cinza" },
+  ];
 
-  async function ask() {
-    const r = await requestNotificationPermission();
-    setPerm(r);
-    if (r === "granted") {
-      setNotifPermission("granted");
-      fireNotification("Notificações ativadas!", "Vou te lembrar das tarefas no horário.");
-    } else if (r === "denied") {
-      toast("Permissão negada", { description: "Ative nas configurações do navegador/celular." });
+  async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      await importBackup(f);
+      toast("Backup importado", { description: "Seus dados foram restaurados." });
+    } catch {
+      toast("Falha ao importar", { description: "Arquivo de backup inválido." });
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  const permLabel =
-    perm === "granted" ? "Ativadas" : perm === "denied" ? "Bloqueadas" : perm === "unsupported" ? "Não suportadas" : "Não solicitadas";
-  const permColor = perm === "granted" ? "var(--primary)" : perm === "denied" ? "var(--danger)" : "var(--warning)";
 
   return (
     <main className="px-4 pt-6">
@@ -94,35 +94,95 @@ function Voce() {
 
       {/* Notifications */}
       <SectionLabel>Notificações</SectionLabel>
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5" style={{ color: permColor }} />
-            <span className="text-sm font-semibold">Status</span>
-          </div>
-          <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: `color-mix(in oklab, ${permColor} 18%, transparent)`, color: permColor }}>
-            {permLabel}
+      <Link to="/notificacoes" className="no-tap block">
+        <Card className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+            <Bell className="h-5 w-5 text-primary" />
           </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Diagnóstico de notificações</p>
+            <p className="text-xs text-muted-foreground">Status, testes e registros detalhados</p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Card>
+      </Link>
+
+      {/* Personalização */}
+      <SectionLabel>Personalização</SectionLabel>
+      <Card className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Palette className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">Tema</span>
         </div>
-        <div className="mt-3 flex gap-2">
-          {perm !== "granted" && perm !== "unsupported" && (
-            <button onClick={ask} className="no-tap flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground">
-              Permitir notificações
-            </button>
-          )}
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Cor primária</p>
+          <div className="flex flex-wrap gap-2">
+            {PRIMARY_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setSettings({ primaryColor: c.value })}
+                className="no-tap h-9 w-9 rounded-full border-2"
+                style={{ background: c.value, borderColor: settings.primaryColor === c.value ? "var(--foreground)" : "transparent" }}
+                aria-label={c.name}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Cor secundária</p>
+          <div className="flex flex-wrap gap-2">
+            {SECONDARY_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setSettings({ secondaryColor: c.value })}
+                className="no-tap h-9 w-9 rounded-full border-2"
+                style={{ background: c.value, borderColor: settings.secondaryColor === c.value ? "var(--foreground)" : "transparent" }}
+                aria-label={c.name}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Modo escuro</p>
+          <div className="grid grid-cols-3 gap-2">
+            {DARK_MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setSettings({ darkMode: m.id })}
+                className="no-tap rounded-xl border py-2 text-xs font-semibold"
+                style={settings.darkMode === m.id ? { borderColor: "var(--primary)", color: "var(--primary)" } : { borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Backup */}
+      <SectionLabel>Backup</SectionLabel>
+      <Card className="space-y-2">
+        <p className="text-xs text-muted-foreground">Salve ou restaure todos os seus dados em um arquivo JSON.</p>
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => fireNotification("Teste de notificação ✅", "Se você viu isso, está funcionando!")}
-            className="no-tap flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+            onClick={() => {
+              exportBackup();
+              toast("Backup exportado");
+            }}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
           >
-            <BellRing className="h-4 w-4" /> Testar notificação
+            <Download className="h-4 w-4" /> Exportar
+          </button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+          >
+            <Upload className="h-4 w-4" /> Importar
           </button>
         </div>
-        {perm === "denied" && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            As notificações estão bloqueadas. Ative nas permissões do site no seu navegador para receber lembretes.
-          </p>
-        )}
+        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImport} />
       </Card>
+
 
       {/* Resumo do dia */}
       <SectionLabel>Resumo do dia</SectionLabel>
