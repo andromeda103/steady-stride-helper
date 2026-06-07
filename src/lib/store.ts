@@ -415,10 +415,69 @@ export const useStore = create<State>()(
       markReminded: (taskId) =>
         set((s) => ({ lastReminderAt: { ...s.lastReminderAt, [taskId]: Date.now() } })),
       addXp: (n) => set((s) => ({ xp: Math.max(0, s.xp + n) })),
+
+      setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      setMission: (taskId) =>
+        set(() => ({ mission: taskId ? { taskId, date: todayKey() } : null })),
+
+      setSubjectGoal: (subjectId, hours) =>
+        set((s) => ({ subjectGoals: { ...s.subjectGoals, [subjectId]: Math.max(0, hours) } })),
+
+      addWeight: (kg) =>
+        set((s) => {
+          const today = todayKey();
+          const rest = s.weights.filter((w) => w.date !== today);
+          return {
+            weights: [...rest, { id: uid(), date: today, kg }].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
+      deleteWeight: (id) => set((s) => ({ weights: s.weights.filter((w) => w.id !== id) })),
+      setWeightGoal: (kg) => set({ weightGoal: Math.max(0, kg) }),
+
+      addSleep: (bed, wake) =>
+        set((s) => {
+          const bm = bed.split(":").map(Number);
+          const wm = wake.split(":").map(Number);
+          const bedMin = (bm[0] || 0) * 60 + (bm[1] || 0);
+          const wakeMin = (wm[0] || 0) * 60 + (wm[1] || 0);
+          const hours = Math.round((((wakeMin - bedMin + 1440) % 1440) / 60) * 10) / 10;
+          const today = todayKey();
+          const rest = s.sleeps.filter((x) => x.date !== today);
+          return {
+            sleeps: [...rest, { id: uid(), date: today, bed, wake, hours }].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
+      deleteSleep: (id) => set((s) => ({ sleeps: s.sleeps.filter((x) => x.id !== id) })),
+
+      logNotif: (kind, title, detail) =>
+        set((s) => ({
+          notifLog: [{ id: uid(), at: Date.now(), kind, title, detail }, ...s.notifLog].slice(0, 60),
+        })),
+      clearNotifLog: () => set({ notifLog: [] }),
+      addScheduled: (sc) => set((s) => ({ scheduled: [...s.scheduled, sc] })),
+      removeScheduled: (id) => set((s) => ({ scheduled: s.scheduled.filter((x) => x.id !== id) })),
+
+      touchActive: () => set({ lastActiveAt: Date.now() }),
     }),
     {
       name: "levelup-store",
-      version: 1,
+      version: 2,
+      migrate: (persisted: unknown, version: number) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        if (version < 2) {
+          if (!state.settings) state.settings = DEFAULT_SETTINGS;
+          if (!state.mission) state.mission = null;
+          if (!state.subjectGoals) state.subjectGoals = {};
+          if (!state.weights) state.weights = [];
+          if (state.weightGoal == null) state.weightGoal = 0;
+          if (!state.sleeps) state.sleeps = [];
+          if (!state.notifLog) state.notifLog = [];
+          if (!state.scheduled) state.scheduled = [];
+          if (state.lastActiveAt == null) state.lastActiveAt = Date.now();
+        }
+        return state as unknown as State;
+      },
     },
   ),
 );
