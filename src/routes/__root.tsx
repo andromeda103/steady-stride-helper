@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BottomNav } from "../components/BottomNav";
 import { Reminders } from "../components/Reminders";
+import { ThemeApplier } from "../components/ThemeApplier";
 import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
