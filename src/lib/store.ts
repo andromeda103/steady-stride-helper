@@ -96,6 +96,62 @@ export interface FocusSession {
   endsAt: number; // epoch ms
 }
 
+export type DarkMode = "default" | "amoled" | "gray";
+
+export interface Settings {
+  primaryColor: string; // oklch/hex applied to --primary
+  secondaryColor: string; // accent used in highlights
+  darkMode: DarkMode;
+}
+
+export interface WeightEntry {
+  id: string;
+  date: string;
+  kg: number;
+}
+
+export interface SleepEntry {
+  id: string;
+  date: string;
+  bed: string; // HH:mm
+  wake: string; // HH:mm
+  hours: number;
+}
+
+export type NotifKind =
+  | "permission"
+  | "sent"
+  | "received"
+  | "error"
+  | "scheduled"
+  | "cancelled";
+
+export interface NotifEvent {
+  id: string;
+  at: number; // epoch ms
+  kind: NotifKind;
+  title: string;
+  detail?: string;
+}
+
+export interface ScheduledNotif {
+  id: string;
+  fireAt: number; // epoch ms
+  title: string;
+  body: string;
+}
+
+export interface Mission {
+  taskId: string;
+  date: string;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  primaryColor: "oklch(0.78 0.17 152)",
+  secondaryColor: "oklch(0.7 0.16 250)",
+  darkMode: "default",
+};
+
 interface State {
   tasks: Task[];
   habits: Habit[];
