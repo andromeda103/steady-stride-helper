@@ -292,6 +292,16 @@ export const useStore = create<State>()(
       notifPermission: "default",
       lastReminderAt: {},
 
+      settings: DEFAULT_SETTINGS,
+      mission: null,
+      subjectGoals: {},
+      weights: [],
+      weightGoal: 0,
+      sleeps: [],
+      notifLog: [],
+      scheduled: [],
+      lastActiveAt: Date.now(),
+
       toggleTask: (id) =>
         set((s) => {
           const today = todayKey();
