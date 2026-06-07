@@ -94,35 +94,95 @@ function Voce() {
 
       {/* Notifications */}
       <SectionLabel>Notificações</SectionLabel>
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5" style={{ color: permColor }} />
-            <span className="text-sm font-semibold">Status</span>
-          </div>
-          <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: `color-mix(in oklab, ${permColor} 18%, transparent)`, color: permColor }}>
-            {permLabel}
+      <Link to="/notificacoes" className="no-tap block">
+        <Card className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+            <Bell className="h-5 w-5 text-primary" />
           </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Diagnóstico de notificações</p>
+            <p className="text-xs text-muted-foreground">Status, testes e registros detalhados</p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Card>
+      </Link>
+
+      {/* Personalização */}
+      <SectionLabel>Personalização</SectionLabel>
+      <Card className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Palette className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">Tema</span>
         </div>
-        <div className="mt-3 flex gap-2">
-          {perm !== "granted" && perm !== "unsupported" && (
-            <button onClick={ask} className="no-tap flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground">
-              Permitir notificações
-            </button>
-          )}
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Cor primária</p>
+          <div className="flex flex-wrap gap-2">
+            {PRIMARY_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setSettings({ primaryColor: c.value })}
+                className="no-tap h-9 w-9 rounded-full border-2"
+                style={{ background: c.value, borderColor: settings.primaryColor === c.value ? "var(--foreground)" : "transparent" }}
+                aria-label={c.name}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Cor secundária</p>
+          <div className="flex flex-wrap gap-2">
+            {SECONDARY_PRESETS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setSettings({ secondaryColor: c.value })}
+                className="no-tap h-9 w-9 rounded-full border-2"
+                style={{ background: c.value, borderColor: settings.secondaryColor === c.value ? "var(--foreground)" : "transparent" }}
+                aria-label={c.name}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs text-muted-foreground">Modo escuro</p>
+          <div className="grid grid-cols-3 gap-2">
+            {DARK_MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setSettings({ darkMode: m.id })}
+                className="no-tap rounded-xl border py-2 text-xs font-semibold"
+                style={settings.darkMode === m.id ? { borderColor: "var(--primary)", color: "var(--primary)" } : { borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Backup */}
+      <SectionLabel>Backup</SectionLabel>
+      <Card className="space-y-2">
+        <p className="text-xs text-muted-foreground">Salve ou restaure todos os seus dados em um arquivo JSON.</p>
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => fireNotification("Teste de notificação ✅", "Se você viu isso, está funcionando!")}
-            className="no-tap flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+            onClick={() => {
+              exportBackup();
+              toast("Backup exportado");
+            }}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
           >
-            <BellRing className="h-4 w-4" /> Testar notificação
+            <Download className="h-4 w-4" /> Exportar
+          </button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+          >
+            <Upload className="h-4 w-4" /> Importar
           </button>
         </div>
-        {perm === "denied" && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            As notificações estão bloqueadas. Ative nas permissões do site no seu navegador para receber lembretes.
-          </p>
-        )}
+        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImport} />
       </Card>
+
 
       {/* Resumo do dia */}
       <SectionLabel>Resumo do dia</SectionLabel>
