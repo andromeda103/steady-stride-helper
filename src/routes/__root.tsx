@@ -128,6 +128,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeApplier />
       <Reminders />
       <div className="mx-auto min-h-screen max-w-md bg-background pb-20">
         <Outlet />
