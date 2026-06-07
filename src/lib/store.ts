@@ -176,6 +176,17 @@ interface State {
   notifPermission: NotificationPermission | "default";
   lastReminderAt: Record<string, number>; // taskId -> epoch ms
 
+  // new slices
+  settings: Settings;
+  mission: Mission | null;
+  subjectGoals: Record<string, number>; // subjectId -> planned hours/week
+  weights: WeightEntry[];
+  weightGoal: number;
+  sleeps: SleepEntry[];
+  notifLog: NotifEvent[];
+  scheduled: ScheduledNotif[];
+  lastActiveAt: number;
+
   // actions
   toggleTask: (id: string) => void;
   addTask: (t: Omit<Task, "id" | "lastDone">) => void;
@@ -203,6 +214,21 @@ interface State {
   setNotifPermission: (p: NotificationPermission) => void;
   markReminded: (taskId: string) => void;
   addXp: (n: number) => void;
+
+  // new actions
+  setSettings: (patch: Partial<Settings>) => void;
+  setMission: (taskId: string | null) => void;
+  setSubjectGoal: (subjectId: string, hours: number) => void;
+  addWeight: (kg: number) => void;
+  deleteWeight: (id: string) => void;
+  setWeightGoal: (kg: number) => void;
+  addSleep: (bed: string, wake: string) => void;
+  deleteSleep: (id: string) => void;
+  logNotif: (kind: NotifKind, title: string, detail?: string) => void;
+  clearNotifLog: () => void;
+  addScheduled: (s: ScheduledNotif) => void;
+  removeScheduled: (id: string) => void;
+  touchActive: () => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
