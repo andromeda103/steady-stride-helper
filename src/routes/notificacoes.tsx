@@ -13,7 +13,6 @@ import {
   Trash2,
   Smartphone,
   ShieldCheck,
-  Radio,
   PlayCircle,
   Globe,
   Bot,
@@ -57,12 +56,18 @@ function Diagnostico() {
   const clearNotifLog = useStore((s) => s.clearNotifLog);
 
   const [perm, setPerm] = useState<string>("default");
+  const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
+  const [testResult, setTestResult] = useState<string>("Nenhum teste executado ainda.");
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    const p = currentPermission();
-    setPerm(p);
-    if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
+    async function loadSnapshot() {
+      const p = currentPermission();
+      setPerm(p);
+      if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
+      setSnapshot(await getNotificationDiagnosticSnapshot());
+    }
+    void loadSnapshot();
   }, [setNotifPermission]);
 
   // refresh countdowns
@@ -79,12 +84,32 @@ function Diagnostico() {
   async function ask() {
     const r = await requestNotificationPermission();
     setPerm(r);
+    setSnapshot(await getNotificationDiagnosticSnapshot());
     if (r === "granted") {
       setNotifPermission("granted");
-      fireNotification("Notificações ativadas!", "Tudo certo para receber lembretes.");
+      const result = await fireNotification("Notificações ativadas!", "Tudo certo para receber lembretes.");
+      setTestResult(result.message);
     } else if (r === "denied") {
+      setTestResult("Permissão negada");
       toast("Permissão negada", { description: "Ative nas permissões do site no navegador/celular." });
     }
+  }
+
+  async function refreshStatus() {
+    setSnapshot(await getNotificationDiagnosticSnapshot());
+  }
+
+  async function runNowTest() {
+    const result = await fireNotification("Teste imediato ✅", "Se você viu isso, está funcionando!");
+    setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+    await refreshStatus();
+  }
+
+  async function runScheduledTest(seconds: number) {
+    scheduleNotification(`Teste ${seconds}s ⏱️`, `Notificação agendada há ${seconds} segundos.`, seconds * 1000);
+    setTestResult(`Agendamento criado para ${seconds}s. Se o navegador suspender timers em segundo plano, isso aparecerá no log.`);
+    toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
+    await refreshStatus();
   }
 
   const permLabel =
@@ -98,7 +123,16 @@ function Diagnostico() {
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
 
-      {/* Permission status */}
+      <Card className="space-y-3">
+        <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
+        <StatusLine icon={<BellRing className="h-4 w-4" />} label="Notification API" value={snapshot?.notificationApiAvailable ? "Sim" : "Não"} color={snapshot?.notificationApiAvailable ? "var(--primary)" : "var(--danger)"} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="Service Worker registrado" value={snapshot?.serviceWorkerRegistered ? `Sim · ${snapshot.serviceWorkerState}` : "Não"} color={snapshot?.serviceWorkerRegistered ? "var(--primary)" : "var(--danger)"} />
+        <StatusLine icon={<Bot className="h-4 w-4" />} label="Push Manager" value={snapshot?.pushManagerAvailable ? "Disponível" : "Indisponível"} color={snapshot?.pushManagerAvailable ? "var(--primary)" : "var(--warning)"} />
+        <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Status da PWA" value={snapshot?.pwaStatus === "standalone" ? "Instalada / standalone" : "Navegador"} color={snapshot?.pwaStatus === "standalone" ? "var(--primary)" : "var(--warning)"} />
+        <StatusLine icon={<Globe className="h-4 w-4" />} label="Navegador detectado" value={snapshot?.browser ?? "—"} />
+        <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Sistema operacional" value={snapshot?.os ?? "—"} />
+      </Card>
+
       <Card>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -122,6 +156,9 @@ function Diagnostico() {
             Bloqueadas pelo navegador. Abra as permissões do site e ative as notificações manualmente.
           </p>
         )}
+        <button onClick={refreshStatus} className="no-tap mt-3 w-full rounded-xl border border-border py-2.5 text-sm font-bold">
+          Atualizar diagnóstico
+        </button>
       </Card>
 
       {/* Last events summary */}
@@ -130,35 +167,30 @@ function Diagnostico() {
         <StatRow icon={<Send className="h-4 w-4" />} label="Última enviada" value={lastSent ? `${lastSent.title} · ${fmtTime(lastSent.at)}` : "—"} />
         <StatRow icon={<Inbox className="h-4 w-4" />} label="Última recebida" value={lastReceived ? `${lastReceived.title} · ${fmtTime(lastReceived.at)}` : "—"} color="var(--primary)" />
         <StatRow icon={<AlertTriangle className="h-4 w-4" />} label="Último erro" value={lastError ? `${lastError.detail ?? lastError.title} · ${fmtTime(lastError.at)}` : "Nenhum"} color={lastError ? "var(--danger)" : undefined} />
+        <StatRow icon={<PlayCircle className="h-4 w-4" />} label="Resultado real do teste" value={testResult} color="var(--warning)" />
       </div>
 
       {/* Tests */}
       <SectionLabel>Testes</SectionLabel>
       <div className="grid grid-cols-1 gap-2">
         <button
-          onClick={() => fireNotification("Teste imediato ✅", "Se você viu isso, está funcionando!")}
+          onClick={() => void runNowTest()}
           className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground"
         >
           <BellRing className="h-4 w-4" /> Testar agora
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => {
-              scheduleNotification("Teste 30s ⏱️", "Notificação agendada há 30 segundos.", 30_000);
-              toast("Agendada para 30s", { description: "Mantenha o app aberto." });
-            }}
+            onClick={() => void runScheduledTest(10)}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
+          >
+            <Clock className="h-4 w-4" /> Em 10s
+          </button>
+          <button
+            onClick={() => void runScheduledTest(30)}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
           >
             <Clock className="h-4 w-4" /> Em 30s
-          </button>
-          <button
-            onClick={() => {
-              scheduleNotification("Teste 1min ⏱️", "Notificação agendada há 1 minuto.", 60_000);
-              toast("Agendada para 1min", { description: "Mantenha o app aberto." });
-            }}
-            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
-          >
-            <Clock className="h-4 w-4" /> Em 1min
           </button>
         </div>
       </div>
@@ -224,9 +256,10 @@ function Diagnostico() {
         <div className="flex items-start gap-2">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} />
           <p className="text-xs text-muted-foreground">
-            Notificações funcionam de forma confiável com o app aberto. No Android, navegadores podem
-            limitar avisos com o app fechado — para 100% de confiabilidade em segundo plano é necessário
-            instalar como app (PWA) ou versão nativa.
+            Problema encontrado: o app usava <strong>new Notification()</strong>, que não é o caminho compatível no Chrome Android.
+            Correção aplicada: agora o app usa <strong>ServiceWorkerRegistration.showNotification()</strong> e valida Service Worker ativo.
+            Resultado: testes imediatos passam a usar o fluxo compatível com Android; testes agendados ainda dependem de timers locais,
+            então podem falhar se o navegador suspender o app em segundo plano.
           </p>
         </div>
       </Card>
@@ -247,5 +280,17 @@ function StatRow({ icon, label, value, color }: { icon: React.ReactNode; label: 
         <p className="truncate text-sm font-semibold" style={color ? { color } : undefined}>{value}</p>
       </div>
     </Card>
+  );
+}
+
+function StatusLine({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color?: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-secondary p-3">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-background" style={color ? { color } : undefined}>{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="truncate text-sm font-semibold" style={color ? { color } : undefined}>{value}</p>
+      </div>
+    </div>
   );
 }
