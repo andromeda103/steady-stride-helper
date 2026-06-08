@@ -11,6 +11,12 @@ import {
   Inbox,
   AlertTriangle,
   Trash2,
+  Smartphone,
+  ShieldCheck,
+  Radio,
+  PlayCircle,
+  Globe,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useStore, type NotifKind } from "@/lib/store";
@@ -21,6 +27,7 @@ import {
   fireNotification,
   scheduleNotification,
   cancelScheduled,
+  getNotificationDiagnosticSnapshot,
 } from "@/lib/notify";
 
 export const Route = createFileRoute("/notificacoes")({
@@ -30,7 +37,9 @@ export const Route = createFileRoute("/notificacoes")({
 
 const KIND_META: Record<NotifKind, { label: string; color: string; icon: typeof Send }> = {
   permission: { label: "Permissão", color: "var(--cat-estudos)", icon: Bell },
+  service_worker: { label: "Service Worker", color: "var(--secondary-foreground)", icon: ShieldCheck },
   sent: { label: "Enviada", color: "var(--cat-estudos)", icon: Send },
+  triggered: { label: "Disparo", color: "var(--warning)", icon: PlayCircle },
   received: { label: "Recebida", color: "var(--primary)", icon: Inbox },
   error: { label: "Erro", color: "var(--danger)", icon: AlertTriangle },
   scheduled: { label: "Agendada", color: "var(--warning)", icon: Clock },
