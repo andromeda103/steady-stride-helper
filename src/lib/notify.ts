@@ -83,7 +83,7 @@ function detectOs() {
   return "Desconhecido";
 }
 
-function currentSwState(reg: ServiceWorkerRegistration | null) {
+function currentSwState(reg: ServiceWorkerRegistration | null | undefined) {
   return reg?.active?.state ?? reg?.waiting?.state ?? reg?.installing?.state ?? "ausente";
 }
 
@@ -270,7 +270,6 @@ export async function fireNotification(
       icon: "/icon.svg",
       badge: "/icon.svg",
       tag: tag ?? title,
-      renotify: false,
       silent: false,
       data: { title, body, at: Date.now() },
     });
