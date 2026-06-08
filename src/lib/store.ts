@@ -120,7 +120,9 @@ export interface SleepEntry {
 
 export type NotifKind =
   | "permission"
+  | "service_worker"
   | "sent"
+  | "triggered"
   | "received"
   | "error"
   | "scheduled"
