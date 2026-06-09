@@ -42,7 +42,6 @@ function Home() {
   const focus = useStore((s) => s.focus);
   
   const toggleTask = useStore((s) => s.toggleTask);
-  const toggleHabit = useStore((s) => s.toggleHabit);
   const incHabit = useStore((s) => s.incHabit);
   const setBadDay = useStore((s) => s.setBadDay);
   const startFocus = useStore((s) => s.startFocus);
