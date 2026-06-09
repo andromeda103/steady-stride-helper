@@ -710,6 +710,34 @@ export const useStore = create<State>()(
             w.deadline = endOfWeekKey(new Date(ws + "T00:00:00"));
           }
         }
+        if (version < 5) {
+          const today = todayKey();
+          const hs = Array.isArray(state.habits) ? (state.habits as Record<string, unknown>[]) : [];
+          state.habits = hs.map((h) => {
+            const target = typeof h.target === "number" ? h.target : 1;
+            const legacyTime = typeof h.time === "string" ? (h.time as string) : "";
+            const times = Array.isArray(h.times) ? h.times : legacyTime ? [legacyTime] : [];
+            const logByDay =
+              h.logByDay && typeof h.logByDay === "object"
+                ? (h.logByDay as Record<string, number>)
+                : h.lastDone === today
+                  ? { [today]: target }
+                  : {};
+            return {
+              id: typeof h.id === "string" ? h.id : uid(),
+              name: typeof h.name === "string" ? h.name : "Hábito",
+              icon: typeof h.icon === "string" ? h.icon : "✅",
+              category: typeof h.category === "string" ? h.category : "Saúde",
+              mode: h.mode === "time" ? "time" : "count",
+              target,
+              times,
+              pomodoroLinked: !!h.pomodoroLinked,
+              logByDay,
+              lastDone: typeof h.lastDone === "string" ? h.lastDone : null,
+            };
+          });
+        }
+
         return state as unknown as State;
       },
     },
