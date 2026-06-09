@@ -71,18 +71,32 @@ function Voce() {
     { id: "gray", label: "Dark cinza" },
   ];
 
-  async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = "";
     if (!f) return;
     try {
-      await importBackup(f);
-      toast("Backup importado", { description: "Seus dados foram restaurados." });
-    } catch {
-      toast("Falha ao importar", { description: "Arquivo de backup inválido." });
-    } finally {
-      if (fileRef.current) fileRef.current.value = "";
+      const meta = await readBackupMeta(f);
+      setPending({ file: f, meta });
+    } catch (err) {
+      const msg = err instanceof BackupError ? err.message : "Arquivo de backup inválido.";
+      toast("Backup inválido", { description: msg });
     }
   }
+
+  async function confirmRestore() {
+    if (!pending) return;
+    try {
+      await importBackup(pending.file);
+      toast("Backup restaurado", { description: "Seus dados foram recuperados com sucesso." });
+    } catch (err) {
+      const msg = err instanceof BackupError ? err.message : "Não foi possível restaurar.";
+      toast("Falha ao restaurar", { description: msg });
+    } finally {
+      setPending(null);
+    }
+  }
+
 
 
   return (
