@@ -291,6 +291,22 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+// Recompute today's cofrinho earning based on required habits completion.
+function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
+  const today = todayKey();
+  const required = habits.filter((h) => cofrinho.requiredHabitIds.includes(h.id));
+  const allDone = required.length > 0 && required.every((h) => h.lastDone === today);
+  const wasEarned = cofrinho.earnedByDay[today] || 0;
+  const shouldEarn = allDone ? cofrinho.dailyAmount : 0;
+  if (wasEarned === shouldEarn) return cofrinho;
+  const balance = cofrinho.balance - wasEarned + shouldEarn;
+  const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
+  const perfectDays = allDone
+    ? Array.from(new Set([...cofrinho.perfectDays, today]))
+    : cofrinho.perfectDays.filter((d) => d !== today);
+  return { ...cofrinho, balance, earnedByDay, perfectDays };
+}
+
 function recomputeHistory(tasks: Task[]): Record<string, number> {
   const today = todayKey();
   const total = tasks.length;
