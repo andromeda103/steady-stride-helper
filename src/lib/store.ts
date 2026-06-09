@@ -317,6 +317,19 @@ function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
   return { ...cofrinho, balance, earnedByDay, perfectDays };
 }
 
+// Set today's progress for a habit and keep `lastDone` (target reached) in sync.
+function setHabitToday(habits: Habit[], id: string, value: number): Habit[] {
+  const today = todayKey();
+  return habits.map((h) => {
+    if (h.id !== id) return h;
+    const v = Math.max(0, Math.round(value));
+    const logByDay = { ...h.logByDay, [today]: v };
+    const done = h.target > 0 && v >= h.target;
+    const lastDone = done ? today : h.lastDone === today ? null : h.lastDone;
+    return { ...h, logByDay, lastDone };
+  });
+}
+
 function recomputeHistory(tasks: Task[]): Record<string, number> {
   const today = todayKey();
   const total = tasks.length;
