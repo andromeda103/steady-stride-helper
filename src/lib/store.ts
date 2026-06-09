@@ -287,7 +287,7 @@ interface State {
   redeemReward: (name: string, amount: number) => void;
 
   // weekly mission actions
-  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
   setWeeklyProgress: (current: number) => void;
 }
 
