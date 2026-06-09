@@ -135,7 +135,7 @@ async function push(): Promise<void> {
   const { error } = await supabase
     .from("user_state")
     .upsert(
-      { user_id: userId, state: snapshot(), client_updated_at: ts },
+      { user_id: userId, state: snapshot() as never, client_updated_at: ts },
       { onConflict: "user_id" },
     );
   if (error) {
