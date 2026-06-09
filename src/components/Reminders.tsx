@@ -34,7 +34,7 @@ export function Reminders() {
         if (timeToMinutes(task.time) > now) continue; // not due yet
         const last = s.lastReminderAt[task.id] || 0;
         if (t - last < REPEAT_MS) continue;
-        fireNotification("LevelUp — Hora de agir", `${task.name} (${task.time})`);
+        void notificationService.notify("LevelUp — Hora de agir", `${task.name} (${task.time})`);
         s.markReminded(task.id);
         break; // one nudge at a time, stay calm
       }
