@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useStore, pendingTasks } from "@/lib/store";
 import { notificationService } from "@/lib/notification-service";
-import { timeToMinutes, nowMinutes } from "@/lib/dates";
+import { timeToMinutes, nowMinutes, todayKey } from "@/lib/dates";
+import { isHabitDoneOn } from "@/lib/habits";
 
 const REPEAT_MS = 15 * 60 * 1000; // repeat every 15 min until done
 const HOUR = 60 * 60 * 1000;
