@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { todayKey, daysBetween } from "./dates";
+import { todayKey, daysBetween, startOfWeekKey } from "./dates";
 
 export type Category =
   | "Estudos"
