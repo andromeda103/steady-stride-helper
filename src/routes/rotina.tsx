@@ -16,7 +16,6 @@ import {
 import { Card, PageTitle, Dot } from "@/components/primitives";
 import { daysBetween } from "@/lib/dates";
 import {
-  habitProgress,
   isHabitDoneOn,
   habitPct,
   formatHabitProgress,
