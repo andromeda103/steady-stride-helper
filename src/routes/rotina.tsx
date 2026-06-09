@@ -214,39 +214,299 @@ function Chip({ active, color, onClick, children }: { active: boolean; color: st
   );
 }
 
+const EMOJI_OPTIONS = ["🦷", "💧", "💊", "📚", "🍅", "✍️", "🏋️", "🥩", "🧘", "🚶", "🌙", "☀️", "❤️", "🔁", "🧠", "🛏️", "🚭", "🙏", "✅"];
+
 function HabitsTab() {
   const habits = useStore((s) => s.habits);
-  const toggleHabit = useStore((s) => s.toggleHabit);
+  const addHabit = useStore((s) => s.addHabit);
+  const addHabitsFromTemplate = useStore((s) => s.addHabitsFromTemplate);
+  const [open, setOpen] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+
   return (
-    <div className="space-y-2">
-      {habits.map((h) => {
-        const ok = isDoneToday(h.lastDone);
-        return (
-          <button
-            key={h.id}
-            onClick={() => toggleHabit(h.id)}
-            className="no-tap flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left active:scale-[0.99]"
-            style={ok ? { borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
-          >
-            <span className="text-3xl">{h.icon}</span>
-            <div className="flex-1">
-              <p className="font-semibold">{h.name}</p>
-              <p className="text-xs" style={{ color: ok ? "var(--primary)" : "var(--muted-foreground)" }}>
-                {ok ? "Concluído hoje ✓" : "Toque para concluir"}
-              </p>
-            </div>
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-full border-2"
-              style={ok ? { background: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="no-tap flex items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm font-semibold text-muted-foreground"
+        >
+          <Plus className="h-4 w-4" /> Novo hábito
+        </button>
+        <button
+          onClick={() => setShowTemplates((v) => !v)}
+          className="no-tap flex items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm font-semibold text-muted-foreground"
+        >
+          ✨ Templates
+        </button>
+      </div>
+
+      {showTemplates && (
+        <Card className="space-y-2">
+          <p className="text-xs text-muted-foreground">Adicione um conjunto pronto de hábitos.</p>
+          {HABIT_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              onClick={() => {
+                addHabitsFromTemplate(tpl.items);
+                toast(`${tpl.name}: ${tpl.items.length} hábitos adicionados`);
+                setShowTemplates(false);
+              }}
+              className="no-tap flex w-full items-center gap-3 rounded-xl border border-border px-3 py-2.5 text-left"
             >
-              {ok && <Check className="h-4 w-4 text-primary-foreground" strokeWidth={3} />}
-            </span>
-          </button>
-        );
-      })}
+              <span className="text-2xl">{tpl.icon}</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">{tpl.name}</p>
+                <p className="text-xs text-muted-foreground">{tpl.desc} · {tpl.items.length} hábitos</p>
+              </div>
+              <Plus className="h-4 w-4 text-primary" />
+            </button>
+          ))}
+        </Card>
+      )}
+
+      {habits.map((h) => (
+        <HabitCard key={h.id} id={h.id} />
+      ))}
+
+      {open && <AddHabitSheet onClose={() => setOpen(false)} onAdd={addHabit} />}
     </div>
   );
 }
+
+function HabitCard({ id }: { id: string }) {
+  const habit = useStore((s) => s.habits.find((h) => h.id === id));
+  const incHabit = useStore((s) => s.incHabit);
+  const deleteHabit = useStore((s) => s.deleteHabit);
+  if (!habit) return null;
+
+  const done = isHabitDoneOn(habit);
+  const pct = habitPct(habit);
+  const step = habitStep(habit);
+  const stats = habitStats(habit);
+  const accent = CATEGORY_VAR[habit.category];
+
+  return (
+    <Card style={{ borderColor: done ? "var(--primary)" : "var(--border)" }}>
+      <div className="flex items-start gap-3">
+        <span className="text-3xl">{habit.icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{habit.name}</p>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <Dot color={accent} /> {habit.category}
+            {habit.mode === "time" && <span>· por tempo</span>}
+            {habit.pomodoroLinked && <span>· 🍅 Pomodoro</span>}
+            {habit.times.length > 0 && (
+              <span className="inline-flex items-center gap-1">
+                · <Clock className="h-3 w-3" /> {habit.times.join(" · ")}
+              </span>
+            )}
+          </p>
+        </div>
+        <button onClick={() => deleteHabit(habit.id)} className="no-tap p-1 text-muted-foreground">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-sm">
+        <span className="font-semibold" style={{ color: done ? "var(--primary)" : undefined }}>
+          {formatHabitProgress(habit)} {done && "✓"}
+        </span>
+        <span className="text-xs text-muted-foreground">{pct}%</span>
+      </div>
+
+      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: done ? "var(--primary)" : accent }} />
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={() => incHabit(habit.id, -step)}
+          className="no-tap flex h-10 flex-1 items-center justify-center rounded-xl border border-border font-bold active:scale-95"
+        >
+          <Minus className="h-4 w-4" />
+          {step > 1 && <span className="ml-1 text-xs">{step}</span>}
+        </button>
+        <span className="min-w-[64px] text-center font-display text-lg font-bold">{formatHabitProgress(habit)}</span>
+        <button
+          onClick={() => incHabit(habit.id, step)}
+          className="no-tap flex h-10 flex-1 items-center justify-center rounded-xl font-bold text-primary-foreground active:scale-95"
+          style={{ background: "var(--primary)" }}
+        >
+          <Plus className="h-4 w-4" />
+          {step > 1 && <span className="ml-1 text-xs">{step}</span>}
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border pt-3 text-center">
+        <Stat label="Sequência" value={`${stats.streak}d`} icon={<Flame className="h-3 w-3 text-primary" />} />
+        <Stat label="Semana" value={`${stats.weeklyAvgPct}%`} />
+        <Stat label="Mês" value={`${stats.monthlyAvgPct}%`} />
+        <Stat label="Conclusão" value={`${stats.completionRate}%`} />
+      </div>
+    </Card>
+  );
+}
+
+function Stat({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div>
+      <p className="flex items-center justify-center gap-1 font-display text-base font-bold">{icon}{value}</p>
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function AddHabitSheet({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (h: { name: string; icon: string; category: Category; mode: HabitMode; target: number; times: string[]; pomodoroLinked: boolean }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("✅");
+  const [category, setCategory] = useState<Category>("Saúde");
+  const [mode, setMode] = useState<HabitMode>("count");
+  const [target, setTarget] = useState(1);
+  const [times, setTimes] = useState<string[]>([]);
+  const [newTime, setNewTime] = useState("");
+  const [pomodoroLinked, setPomodoroLinked] = useState(false);
+
+  function addTime() {
+    if (!newTime || times.includes(newTime)) return;
+    setTimes([...times, newTime].sort());
+    setNewTime("");
+  }
+
+  function submit() {
+    if (!name.trim()) {
+      toast("Dê um nome ao hábito");
+      return;
+    }
+    onAdd({
+      name: name.trim(),
+      icon,
+      category,
+      mode,
+      target: Math.max(1, target),
+      times,
+      pomodoroLinked: mode === "time" && pomodoroLinked,
+    });
+    toast("Hábito criado");
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t border-border bg-card p-5 pb-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold">Novo hábito</h3>
+          <button onClick={onClose} className="no-tap rounded-full bg-muted p-1.5">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <Field label="Nome">
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Escovar os dentes"
+              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary"
+            />
+          </Field>
+          <Field label="Ícone">
+            <div className="flex flex-wrap gap-1.5">
+              {EMOJI_OPTIONS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setIcon(e)}
+                  className="no-tap flex h-9 w-9 items-center justify-center rounded-lg border text-xl"
+                  style={icon === e ? { borderColor: "var(--primary)", background: "color-mix(in oklab, var(--primary) 14%, transparent)" } : { borderColor: "var(--border)" }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Categoria">
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <Chip key={c} active={category === c} color={CATEGORY_VAR[c]} onClick={() => setCategory(c)}>
+                  {c}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+          <Field label="Tipo de meta">
+            <div className="flex gap-2">
+              <Chip active={mode === "count"} color="var(--primary)" onClick={() => setMode("count")}>
+                Quantidade
+              </Chip>
+              <Chip active={mode === "time"} color="var(--primary)" onClick={() => setMode("time")}>
+                Tempo (min)
+              </Chip>
+            </div>
+          </Field>
+          <Field label={mode === "time" ? "Meta diária (minutos)" : "Meta diária (vezes)"}>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setTarget((t) => Math.max(1, t - (mode === "time" ? 5 : 1)))} className="no-tap flex h-10 w-10 items-center justify-center rounded-xl border border-border">
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
+                type="number"
+                value={target}
+                onChange={(e) => setTarget(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-center text-sm outline-none focus:border-primary"
+              />
+              <button onClick={() => setTarget((t) => t + (mode === "time" ? 5 : 1))} className="no-tap flex h-10 w-10 items-center justify-center rounded-xl border border-border">
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </Field>
+          {mode === "time" && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={pomodoroLinked} onChange={(e) => setPomodoroLinked(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
+              Somar tempo do Pomodoro automaticamente 🍅
+            </label>
+          )}
+          <Field label="Horários e lembretes">
+            <div className="flex gap-2">
+              <input
+                type="time"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+                className="flex-1 rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary"
+              />
+              <button onClick={addTime} className="no-tap rounded-xl bg-primary px-4 font-bold text-primary-foreground">
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {times.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {times.map((t) => (
+                  <span key={t} className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold">
+                    <Clock className="h-3 w-3" /> {t}
+                    <button onClick={() => setTimes(times.filter((x) => x !== t))} className="no-tap text-muted-foreground">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </Field>
+          <button onClick={submit} className="no-tap w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground">
+            Criar hábito
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function AntiTab() {
   const antiHabits = useStore((s) => s.antiHabits);
