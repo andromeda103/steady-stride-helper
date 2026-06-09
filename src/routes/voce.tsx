@@ -112,7 +112,48 @@ function Voce() {
         </div>
       </Card>
 
+      {/* Conta e sincronização */}
+      <SectionLabel>Conta e sincronização</SectionLabel>
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Cloud className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">{user ? user.email : "Sem login"}</span>
+          </div>
+          <SyncBadge />
+        </div>
+        {user ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleSyncNow}
+              className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-semibold"
+            >
+              <RefreshCw className="h-4 w-4" /> Sincronizar
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground"
+            >
+              <LogOut className="h-4 w-4" /> Sair
+            </button>
+          </div>
+        ) : (
+          <>
+            <Link
+              to="/auth"
+              className="no-tap flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
+            >
+              Entrar e sincronizar
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              Entre para salvar seus dados na nuvem e acessá-los em outros aparelhos.
+            </p>
+          </>
+        )}
+      </Card>
+
       {/* Notifications */}
+
       <SectionLabel>Notificações</SectionLabel>
       <Link to="/notificacoes" className="no-tap block">
         <Card className="flex items-center gap-3">
