@@ -535,10 +535,55 @@ export const useStore = create<State>()(
       removeScheduled: (id) => set((s) => ({ scheduled: s.scheduled.filter((x) => x.id !== id) })),
 
       touchActive: () => set({ lastActiveAt: Date.now() }),
+
+      setDailyAmount: (amount) =>
+        set((s) => ({ cofrinho: applyCofrinhoToday({ ...s.cofrinho, dailyAmount: Math.max(0, amount) }, s.habits) })),
+
+      toggleRequiredHabit: (habitId) =>
+        set((s) => {
+          const has = s.cofrinho.requiredHabitIds.includes(habitId);
+          const requiredHabitIds = has
+            ? s.cofrinho.requiredHabitIds.filter((x) => x !== habitId)
+            : [...s.cofrinho.requiredHabitIds, habitId];
+          return { cofrinho: applyCofrinhoToday({ ...s.cofrinho, requiredHabitIds }, s.habits) };
+        }),
+
+      recomputeCofrinho: () =>
+        set((s) => ({ cofrinho: applyCofrinhoToday(s.cofrinho, s.habits) })),
+
+      addRewardGoal: (name, target) =>
+        set((s) => ({
+          cofrinho: { ...s.cofrinho, goals: [...s.cofrinho.goals, { id: uid(), name, target: Math.max(1, target) }] },
+        })),
+
+      deleteRewardGoal: (id) =>
+        set((s) => ({ cofrinho: { ...s.cofrinho, goals: s.cofrinho.goals.filter((g) => g.id !== id) } })),
+
+      redeemReward: (name, amount) =>
+        set((s) => {
+          if (amount > s.cofrinho.balance) return {};
+          return {
+            cofrinho: {
+              ...s.cofrinho,
+              balance: s.cofrinho.balance - amount,
+              history: [{ id: uid(), name, amount, date: todayKey() }, ...s.cofrinho.history],
+            },
+          };
+        }),
+
+      setWeekly: (m) =>
+        set(() =>
+          m
+            ? { weekly: { id: uid(), label: m.label, target: Math.max(1, m.target), current: 0, unit: m.unit, weekStart: startOfWeekKey() } }
+            : { weekly: null },
+        ),
+
+      setWeeklyProgress: (current) =>
+        set((s) => (s.weekly ? { weekly: { ...s.weekly, current: Math.max(0, current) } } : {})),
     }),
     {
       name: "levelup-store",
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
         if (version < 2) {
@@ -551,6 +596,10 @@ export const useStore = create<State>()(
           if (!state.notifLog) state.notifLog = [];
           if (!state.scheduled) state.scheduled = [];
           if (state.lastActiveAt == null) state.lastActiveAt = Date.now();
+        }
+        if (version < 3) {
+          if (!state.cofrinho) state.cofrinho = DEFAULT_COFRINHO;
+          if (state.weekly === undefined) state.weekly = null;
         }
         return state as unknown as State;
       },
