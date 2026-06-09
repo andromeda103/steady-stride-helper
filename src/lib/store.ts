@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { todayKey, daysBetween, startOfWeekKey } from "./dates";
+import { todayKey, daysBetween, startOfWeekKey, endOfWeekKey } from "./dates";
 import { getStorage } from "./persistence";
 
 export type Category =
