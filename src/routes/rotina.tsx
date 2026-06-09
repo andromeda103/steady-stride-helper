@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2, Check, X, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Check, X, RotateCcw, Minus, Flame, Clock } from "lucide-react";
 import { toast } from "sonner";
 import {
   useStore,
@@ -11,9 +11,19 @@ import {
   CATEGORY_VAR,
   type Category,
   type Priority,
+  type HabitMode,
 } from "@/lib/store";
 import { Card, PageTitle, Dot } from "@/components/primitives";
 import { daysBetween } from "@/lib/dates";
+import {
+  habitProgress,
+  isHabitDoneOn,
+  habitPct,
+  formatHabitProgress,
+  habitStep,
+  habitStats,
+  HABIT_TEMPLATES,
+} from "@/lib/habits";
 
 export const Route = createFileRoute("/rotina")({
   head: () => ({ meta: [{ title: "Rotina — LevelUp" }] }),
