@@ -18,7 +18,7 @@ export function Reminders() {
       { ms: 24 * HOUR, msg: "24h sem usar o LevelUp. Que tal uma vitória rápida agora?" },
     ];
     const hit = thresholds.find((t) => gap >= t.ms);
-    if (hit) fireNotification("Sentimos sua falta 👀", hit.msg);
+    if (hit) void notificationService.notify("Sentimos sua falta 👀", hit.msg);
     s.touchActive();
   }, []);
 
