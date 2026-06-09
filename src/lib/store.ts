@@ -275,6 +275,18 @@ interface State {
   addScheduled: (s: ScheduledNotif) => void;
   removeScheduled: (id: string) => void;
   touchActive: () => void;
+
+  // cofrinho actions
+  setDailyAmount: (amount: number) => void;
+  toggleRequiredHabit: (habitId: string) => void;
+  recomputeCofrinho: () => void;
+  addRewardGoal: (name: string, target: number) => void;
+  deleteRewardGoal: (id: string) => void;
+  redeemReward: (name: string, amount: number) => void;
+
+  // weekly mission actions
+  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeeklyProgress: (current: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
