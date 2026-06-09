@@ -335,10 +335,11 @@ export const useStore = create<State>()(
         { id: uid(), name: "Fazer treino", time: "18:00", category: "Treino", priority: "Alta", essential: false, lastDone: null },
       ],
       habits: [
-        { id: uid(), name: "Escovar os dentes", icon: "🦷", lastDone: null },
-        { id: uid(), name: "Tomar creatina", icon: "💊", lastDone: null },
-        { id: uid(), name: "Beber água", icon: "💧", lastDone: null },
-        { id: uid(), name: "Dormir no horário", icon: "🌙", lastDone: null },
+        { id: uid(), name: "Escovar os dentes", icon: "🦷", category: "Saúde", mode: "count", target: 3, times: ["07:00", "13:00", "22:00"], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Beber água", icon: "💧", category: "Saúde", mode: "count", target: 8, times: [], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Tomar creatina", icon: "💊", category: "Treino", mode: "count", target: 1, times: ["12:30"], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Estudar", icon: "📚", category: "Estudos", mode: "time", target: 240, times: [], pomodoroLinked: true, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Dormir no horário", icon: "🌙", category: "Saúde", mode: "count", target: 1, times: ["22:30"], pomodoroLinked: false, logByDay: {}, lastDone: null },
       ],
       subjects: [
         { id: uid(), name: "Português", sessions: 0, totalSeconds: 0 },
