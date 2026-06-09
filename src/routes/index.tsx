@@ -11,7 +11,8 @@ import {
   type Task,
 } from "@/lib/store";
 import { ProgressRing } from "@/components/ProgressRing";
-import { Card, Bar, SectionLabel } from "@/components/primitives";
+import { MainMission } from "@/components/MainMission";
+import { Card, SectionLabel } from "@/components/primitives";
 import { formatClock } from "@/lib/dates";
 
 export const Route = createFileRoute("/")({
@@ -38,7 +39,7 @@ function Home() {
   const xp = useStore((s) => s.xp);
   const badDay = useStore((s) => s.badDay);
   const focus = useStore((s) => s.focus);
-  const weekly = useStore((s) => s.weekly);
+  
   const toggleTask = useStore((s) => s.toggleTask);
   const toggleHabit = useStore((s) => s.toggleHabit);
   const setBadDay = useStore((s) => s.setBadDay);
@@ -98,6 +99,10 @@ function Home() {
           </div>
         </div>
       </div>
+
+      {/* Missão Principal — prioridade máxima */}
+      <MainMission className="mb-4" />
+
 
       {/* Focus mode banner */}
       {focus && focusTask && (
@@ -180,23 +185,7 @@ function Home() {
         </button>
       </div>
 
-      {/* Missão da semana */}
-      {weekly && (
-        <>
-          <SectionLabel>Missão da semana</SectionLabel>
-          <Card>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-bold">{weekly.label}</p>
-              <span className="text-xs text-muted-foreground">
-                {weekly.current}/{weekly.target} {weekly.unit}
-              </span>
-            </div>
-            <div className="mt-2">
-              <Bar pct={Math.min(100, Math.round((weekly.current / weekly.target) * 100))} />
-            </div>
-          </Card>
-        </>
-      )}
+
 
 
 

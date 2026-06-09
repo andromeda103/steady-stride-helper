@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { todayKey, daysBetween, startOfWeekKey } from "./dates";
+import { todayKey, daysBetween, startOfWeekKey, endOfWeekKey } from "./dates";
 import { getStorage } from "./persistence";
 
 export type Category =
@@ -169,6 +169,7 @@ export interface WeeklyMission {
   current: number;
   unit: string; // ex: "horas", "questões", "treinos"
   weekStart: string; // startOfWeekKey
+  deadline: string; // date key (YYYY-MM-DD) — prazo final da missão
 }
 
 export interface Cofrinho {
@@ -286,7 +287,7 @@ interface State {
   redeemReward: (name: string, amount: number) => void;
 
   // weekly mission actions
-  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
   setWeeklyProgress: (current: number) => void;
 }
 
@@ -575,7 +576,17 @@ export const useStore = create<State>()(
       setWeekly: (m) =>
         set(() =>
           m
-            ? { weekly: { id: uid(), label: m.label, target: Math.max(1, m.target), current: 0, unit: m.unit, weekStart: startOfWeekKey() } }
+            ? {
+                weekly: {
+                  id: uid(),
+                  label: m.label,
+                  target: Math.max(1, m.target),
+                  current: 0,
+                  unit: m.unit,
+                  weekStart: startOfWeekKey(),
+                  deadline: m.deadline || endOfWeekKey(),
+                },
+              }
             : { weekly: null },
         ),
 
@@ -584,7 +595,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
@@ -602,6 +613,13 @@ export const useStore = create<State>()(
         if (version < 3) {
           if (!state.cofrinho) state.cofrinho = DEFAULT_COFRINHO;
           if (state.weekly === undefined) state.weekly = null;
+        }
+        if (version < 4) {
+          const w = state.weekly as Record<string, unknown> | null | undefined;
+          if (w && typeof w === "object" && !w.deadline) {
+            const ws = typeof w.weekStart === "string" ? w.weekStart : startOfWeekKey();
+            w.deadline = endOfWeekKey(new Date(ws + "T00:00:00"));
+          }
         }
         return state as unknown as State;
       },

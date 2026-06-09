@@ -4,7 +4,8 @@ import { PiggyBank, Target, Gift, Trash2, Check, Plus, Trophy, CalendarCheck, Co
 import { toast } from "sonner";
 import { useStore, isDoneToday } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
-import { todayKey } from "@/lib/dates";
+import { todayKey, endOfWeekKey } from "@/lib/dates";
+import { missionInfo } from "@/lib/mission";
 
 export const Route = createFileRoute("/cofrinho")({
   head: () => ({ meta: [{ title: "Cofrinho — LevelUp" }] }),
@@ -251,15 +252,16 @@ function WeeklyEditor({
   setWeeklyProgress,
 }: {
   weekly: ReturnType<typeof useStore.getState>["weekly"];
-  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
   setWeeklyProgress: (n: number) => void;
 }) {
   const [label, setLabel] = useState("");
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("");
+  const [deadline, setDeadline] = useState(endOfWeekKey());
 
   if (weekly) {
-    const pct = Math.min(100, Math.round((weekly.current / weekly.target) * 100));
+    const info = missionInfo(weekly);
     return (
       <Card>
         <div className="flex items-center justify-between">
@@ -269,10 +271,26 @@ function WeeklyEditor({
           </button>
         </div>
         <div className="mt-2">
-          <Bar pct={pct} />
+          <Bar pct={info.pct} />
           <p className="mt-1.5 text-xs text-muted-foreground">
-            {weekly.current} / {weekly.target} {weekly.unit} · {pct}%
+            {weekly.current} / {weekly.target} {weekly.unit} · {info.pct}%
           </p>
+        </div>
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="capitalize">Prazo: {info.deadlineLabel}</span>
+          <span
+            style={{
+              color: info.done
+                ? "var(--primary)"
+                : info.overdue
+                ? "var(--danger)"
+                : info.daysLeft <= 1
+                ? "var(--warning)"
+                : undefined,
+            }}
+          >
+            {info.daysLeftLabel}
+          </span>
         </div>
         <div className="mt-3 flex items-center gap-2">
           <button
@@ -299,6 +317,7 @@ function WeeklyEditor({
     );
   }
 
+
   return (
     <Card className="space-y-2">
       <input
@@ -322,6 +341,16 @@ function WeeklyEditor({
           className="flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
         />
       </div>
+      <label className="block text-xs text-muted-foreground">
+        Prazo final
+        <input
+          type="date"
+          value={deadline}
+          min={todayKey()}
+          onChange={(e) => setDeadline(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm text-foreground"
+        />
+      </label>
       <button
         onClick={() => {
           const t = parseFloat(target.replace(",", "."));
@@ -329,16 +358,18 @@ function WeeklyEditor({
             toast("Preencha o objetivo e a meta");
             return;
           }
-          setWeekly({ label: label.trim(), target: t, unit: unit.trim() || "" });
+          setWeekly({ label: label.trim(), target: t, unit: unit.trim() || "", deadline: deadline || endOfWeekKey() });
           setLabel("");
           setTarget("");
           setUnit("");
-          toast("Missão da semana criada 🔥");
+          setDeadline(endOfWeekKey());
+          toast("Missão Principal criada 🔥");
         }}
         className="no-tap w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
       >
-        Criar missão da semana
+        Criar Missão Principal
       </button>
     </Card>
+
   );
 }
