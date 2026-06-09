@@ -595,7 +595,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
@@ -613,6 +613,13 @@ export const useStore = create<State>()(
         if (version < 3) {
           if (!state.cofrinho) state.cofrinho = DEFAULT_COFRINHO;
           if (state.weekly === undefined) state.weekly = null;
+        }
+        if (version < 4) {
+          const w = state.weekly as Record<string, unknown> | null | undefined;
+          if (w && typeof w === "object" && !w.deadline) {
+            const ws = typeof w.weekStart === "string" ? w.weekStart : startOfWeekKey();
+            w.deadline = endOfWeekKey(new Date(ws + "T00:00:00"));
+          }
         }
         return state as unknown as State;
       },
