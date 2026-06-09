@@ -11,7 +11,8 @@ import {
   type Task,
 } from "@/lib/store";
 import { ProgressRing } from "@/components/ProgressRing";
-import { Card, Bar, SectionLabel } from "@/components/primitives";
+import { MainMission } from "@/components/MainMission";
+import { Card, SectionLabel } from "@/components/primitives";
 import { formatClock } from "@/lib/dates";
 
 export const Route = createFileRoute("/")({
