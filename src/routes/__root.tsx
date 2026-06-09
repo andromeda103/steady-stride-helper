@@ -16,6 +16,7 @@ import { Reminders } from "../components/Reminders";
 import { ThemeApplier } from "../components/ThemeApplier";
 import { Toaster } from "../components/ui/sonner";
 import { notificationService } from "../lib/notification-service";
+import { initSync } from "../lib/sync";
 
 function NotFoundComponent() {
   return (
