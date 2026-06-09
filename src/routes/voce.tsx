@@ -321,6 +321,24 @@ function Voce() {
   );
 }
 
+function fmtDate(iso: string | null): string {
+  if (!iso) return "Desconhecida";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Desconhecida";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="flex items-center gap-1.5 text-muted-foreground">{icon} {label}</span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  );
+}
+
+
+
 function Summary({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-xl bg-secondary p-3">
