@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useRef } from "react";
-import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload, Cloud, LogOut, RefreshCw } from "lucide-react";
+import { useRef, useState } from "react";
+import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload, Cloud, LogOut, RefreshCw, ShieldCheck, X, Calendar, HardDrive, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useStore, levelInfo, isDoneToday, type DarkMode } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
 import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
-import { exportBackup, importBackup } from "@/lib/backup";
+import { exportBackup, importBackup, readBackupMeta, formatBytes, BackupError, type BackupMeta } from "@/lib/backup";
 import { useAuth } from "@/hooks/useAuth";
 import { SyncBadge } from "@/components/SyncBadge";
 import { syncNow } from "@/lib/sync";
