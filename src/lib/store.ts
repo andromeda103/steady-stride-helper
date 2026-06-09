@@ -43,11 +43,19 @@ export interface Task {
   lastDone: string | null; // date key when last completed
 }
 
+export type HabitMode = "count" | "time";
+
 export interface Habit {
   id: string;
   name: string;
   icon: string;
-  lastDone: string | null;
+  category: Category;
+  mode: HabitMode; // "count" = vezes/dia | "time" = minutos/dia
+  target: number; // meta diária (vezes ou minutos)
+  times: string[]; // horários múltiplos (HH:mm) para lembretes
+  pomodoroLinked: boolean; // soma tempo do Pomodoro automaticamente (modo time)
+  logByDay: Record<string, number>; // date -> progresso do dia (vezes ou minutos)
+  lastDone: string | null; // último dia em que a meta foi atingida (compat cofrinho)
 }
 
 export interface Subject {
