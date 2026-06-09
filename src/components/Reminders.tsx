@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useStore, pendingTasks } from "@/lib/store";
-import { fireNotification } from "@/lib/notify";
+import { notificationService } from "@/lib/notification-service";
 import { timeToMinutes, nowMinutes } from "@/lib/dates";
 
 const REPEAT_MS = 15 * 60 * 1000; // repeat every 15 min until done
