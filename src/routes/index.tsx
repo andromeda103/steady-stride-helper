@@ -100,6 +100,10 @@ function Home() {
         </div>
       </div>
 
+      {/* Missão Principal — prioridade máxima */}
+      <MainMission className="mb-4" />
+
+
       {/* Focus mode banner */}
       {focus && focusTask && (
         <Card className="mb-4 border-primary/40 bg-primary/10">
