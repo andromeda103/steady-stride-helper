@@ -1,12 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
-import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload } from "lucide-react";
+import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload, Cloud, LogOut, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useStore, levelInfo, isDoneToday, type DarkMode } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
 import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
 import { exportBackup, importBackup } from "@/lib/backup";
+import { useAuth } from "@/hooks/useAuth";
+import { SyncBadge } from "@/components/SyncBadge";
+import { syncNow } from "@/lib/sync";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/voce")({
   head: () => ({ meta: [{ title: "Você — LevelUp" }] }),
@@ -24,9 +28,25 @@ function Voce() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const lvl = levelInfo(xp);
   const today = todayKey();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    toast("Você saiu", { description: "Os dados continuam neste aparelho." });
+    navigate({ to: "/voce" });
+  }
+
+  async function handleSyncNow() {
+    const status = await syncNow();
+    if (status === "synced") toast("Tudo sincronizado");
+    else if (status === "offline") toast("Sem internet", { description: "Vamos sincronizar quando voltar." });
+    else if (status === "error") toast("Erro ao sincronizar", { description: "Tente novamente." });
+  }
+
 
   const tasksDone = tasks.filter((t) => isDoneToday(t.lastDone)).length;
   const habitsDone = habits.filter((h) => isDoneToday(h.lastDone)).length;
@@ -92,7 +112,48 @@ function Voce() {
         </div>
       </Card>
 
+      {/* Conta e sincronização */}
+      <SectionLabel>Conta e sincronização</SectionLabel>
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Cloud className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">{user ? user.email : "Sem login"}</span>
+          </div>
+          <SyncBadge />
+        </div>
+        {user ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleSyncNow}
+              className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-semibold"
+            >
+              <RefreshCw className="h-4 w-4" /> Sincronizar
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground"
+            >
+              <LogOut className="h-4 w-4" /> Sair
+            </button>
+          </div>
+        ) : (
+          <>
+            <Link
+              to="/auth"
+              className="no-tap flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
+            >
+              Entrar e sincronizar
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              Entre para salvar seus dados na nuvem e acessá-los em outros aparelhos.
+            </p>
+          </>
+        )}
+      </Card>
+
       {/* Notifications */}
+
       <SectionLabel>Notificações</SectionLabel>
       <Link to="/notificacoes" className="no-tap block">
         <Card className="flex items-center gap-3">
