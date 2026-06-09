@@ -7,6 +7,7 @@ import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
 import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
 import { exportBackup, importBackup, readBackupMeta, formatBytes, BackupError, type BackupMeta } from "@/lib/backup";
+import { MainMission } from "@/components/MainMission";
 import { useAuth } from "@/hooks/useAuth";
 import { SyncBadge } from "@/components/SyncBadge";
 import { syncNow } from "@/lib/sync";
