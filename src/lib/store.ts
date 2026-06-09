@@ -230,6 +230,8 @@ interface State {
   notifLog: NotifEvent[];
   scheduled: ScheduledNotif[];
   lastActiveAt: number;
+  cofrinho: Cofrinho;
+  weekly: WeeklyMission | null;
 
   // actions
   toggleTask: (id: string) => void;
