@@ -148,6 +148,48 @@ export interface Mission {
   date: string;
 }
 
+export interface RewardGoal {
+  id: string;
+  name: string;
+  target: number; // R$
+}
+
+export interface RewardRedeem {
+  id: string;
+  name: string;
+  amount: number; // R$
+  date: string; // date key
+}
+
+export interface WeeklyMission {
+  id: string;
+  label: string;
+  target: number;
+  current: number;
+  unit: string; // ex: "horas", "questões", "treinos"
+  weekStart: string; // startOfWeekKey
+}
+
+export interface Cofrinho {
+  dailyAmount: number; // R$ por dia perfeito
+  requiredHabitIds: string[]; // hábitos marcados como obrigatórios
+  balance: number; // saldo acumulado (ganho - resgatado)
+  earnedByDay: Record<string, number>; // date -> R$ ganho
+  perfectDays: string[]; // date keys de dias perfeitos
+  goals: RewardGoal[];
+  history: RewardRedeem[];
+}
+
+export const DEFAULT_COFRINHO: Cofrinho = {
+  dailyAmount: 10,
+  requiredHabitIds: [],
+  balance: 0,
+  earnedByDay: {},
+  perfectDays: [],
+  goals: [],
+  history: [],
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   primaryColor: "oklch(0.78 0.17 152)",
   secondaryColor: "oklch(0.7 0.16 250)",
