@@ -169,6 +169,7 @@ export interface WeeklyMission {
   current: number;
   unit: string; // ex: "horas", "questões", "treinos"
   weekStart: string; // startOfWeekKey
+  deadline: string; // date key (YYYY-MM-DD) — prazo final da missão
 }
 
 export interface Cofrinho {
