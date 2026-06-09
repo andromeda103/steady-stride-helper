@@ -292,8 +292,9 @@ function Voce() {
 
 
 
-      {/* Resumo do dia */}
-      <SectionLabel>Resumo do dia</SectionLabel>
+      {/* Estatísticas */}
+      <SectionLabel>Estatísticas</SectionLabel>
+      <MainMission className="mb-3" />
       <Card>
         <div className="grid grid-cols-2 gap-3">
           <Summary icon={<CheckCircle2 className="h-4 w-4" />} label="Tarefas" value={`${tasksDone}/${tasks.length}`} />
@@ -308,6 +309,7 @@ function Voce() {
 
       {/* Calendar */}
       <SectionLabel>Calendário</SectionLabel>
+      <MainMission className="mb-3" />
       <CalendarView history={history} liveTodayPct={taskPct} />
       <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted-foreground">
         <Legend color="var(--primary)" label="Concluído" />
