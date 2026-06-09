@@ -244,29 +244,41 @@ function Home() {
         </>
       )}
 
-      {/* Hábitos básicos */}
-      <SectionLabel>Hábitos essenciais</SectionLabel>
+      {/* Hábitos do dia */}
+      <SectionLabel>Hábitos do dia</SectionLabel>
       <div className="grid grid-cols-2 gap-3">
         {habits.map((h) => {
-          const ok = isDoneToday(h.lastDone);
+          const ok = isHabitDoneOn(h);
+          const pct = habitPct(h);
           return (
-            <button
+            <div
               key={h.id}
-              onClick={() => toggleHabit(h.id)}
-              className="no-tap flex items-center gap-3 rounded-xl border bg-card px-3 py-3 text-left transition-colors active:scale-[0.99]"
+              className="flex items-center gap-2.5 rounded-xl border bg-card px-3 py-2.5"
               style={ok ? { borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
             >
               <span className="text-2xl">{h.icon}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{h.name}</p>
                 <p className="text-xs" style={{ color: ok ? "var(--primary)" : "var(--muted-foreground)" }}>
-                  {ok ? "Concluído ✓" : "Pendente"}
+                  {formatHabitProgress(h)} {ok && "✓"}
                 </p>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: ok ? "var(--primary)" : CATEGORY_VAR[h.category] }} />
+                </div>
               </div>
-            </button>
+              <button
+                onClick={() => incHabit(h.id, habitStep(h))}
+                className="no-tap flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-primary-foreground active:scale-90"
+                style={{ background: "var(--primary)" }}
+                aria-label={`Registrar ${h.name}`}
+              >
+                <Check className="h-4 w-4" strokeWidth={3} />
+              </button>
+            </div>
           );
         })}
       </div>
+
 
       <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Zap className="h-3.5 w-3.5 text-primary" />
