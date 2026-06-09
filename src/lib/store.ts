@@ -359,6 +359,8 @@ export const useStore = create<State>()(
       notifLog: [],
       scheduled: [],
       lastActiveAt: Date.now(),
+      cofrinho: DEFAULT_COFRINHO,
+      weekly: null,
 
       toggleTask: (id) =>
         set((s) => {
