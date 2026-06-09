@@ -236,28 +236,59 @@ function Voce() {
       </Card>
 
       {/* Backup */}
-      <SectionLabel>Backup</SectionLabel>
-      <Card className="space-y-2">
-        <p className="text-xs text-muted-foreground">Salve ou restaure todos os seus dados em um arquivo JSON.</p>
+      <SectionLabel>Backup e recuperação</SectionLabel>
+      <Card className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Salve ou restaure todos os seus dados em um arquivo JSON — funciona mesmo sem internet ou login.
+        </p>
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => {
               exportBackup();
-              toast("Backup exportado");
+              toast("Backup exportado", { description: "Arquivo JSON baixado neste aparelho." });
             }}
             className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
           >
-            <Download className="h-4 w-4" /> Exportar
+            <Download className="h-4 w-4" /> Exportar backup
           </button>
           <button
             onClick={() => fileRef.current?.click()}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
           >
-            <Upload className="h-4 w-4" /> Importar
+            <Upload className="h-4 w-4" /> Restaurar backup
           </button>
         </div>
-        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImport} />
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onFilePicked} />
+
+        {pending && (
+          <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-bold text-primary">
+                <ShieldCheck className="h-4 w-4" /> Backup válido
+              </span>
+              <button onClick={() => setPending(null)} className="no-tap text-muted-foreground" aria-label="Cancelar">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-1.5 text-xs">
+              <MetaRow icon={<Calendar className="h-3.5 w-3.5" />} label="Data do backup" value={fmtDate(pending.meta.exportedAt)} />
+              <MetaRow icon={<HardDrive className="h-3.5 w-3.5" />} label="Tamanho" value={formatBytes(pending.meta.sizeBytes)} />
+              <MetaRow icon={<Tag className="h-3.5 w-3.5" />} label="Versão do app" value={pending.meta.appVersion} />
+              <MetaRow icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Seções de dados" value={String(pending.meta.sections)} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Restaurar vai substituir os dados atuais deste aparelho.
+            </p>
+            <button
+              onClick={confirmRestore}
+              className="no-tap w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
+            >
+              Confirmar restauração
+            </button>
+          </div>
+        )}
       </Card>
+
 
 
       {/* Resumo do dia */}
