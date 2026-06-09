@@ -41,4 +41,25 @@ export function startOfWeekKey(d: Date = new Date()): string {
   return todayKey(monday);
 }
 
+/** End of the current week (Sunday) as a date key. */
+export function endOfWeekKey(d: Date = new Date()): string {
+  const monday = new Date(startOfWeekKey(d) + "T00:00:00");
+  monday.setDate(monday.getDate() + 6);
+  return todayKey(monday);
+}
+
+/** Add n days to a date key, returning a date key. */
+export function addDaysKey(key: string, n: number): string {
+  const d = new Date(key + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return todayKey(d);
+}
+
+/** Signed number of days from today until the given date key (can be negative). */
+export function daysUntil(toKey: string): number {
+  const today = new Date(todayKey() + "T00:00:00");
+  const to = new Date(toKey + "T00:00:00");
+  return Math.round((to.getTime() - today.getTime()) / 86400000);
+}
+
 export const WEEKDAYS = ["S", "T", "Q", "Q", "S", "S", "D"]; // mon..sun
