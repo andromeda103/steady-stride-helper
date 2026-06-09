@@ -180,6 +180,26 @@ function Home() {
         </button>
       </div>
 
+      {/* Missão da semana */}
+      {weekly && (
+        <>
+          <SectionLabel>Missão da semana</SectionLabel>
+          <Card>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold">{weekly.label}</p>
+              <span className="text-xs text-muted-foreground">
+                {weekly.current}/{weekly.target} {weekly.unit}
+              </span>
+            </div>
+            <div className="mt-2">
+              <Bar pct={Math.min(100, Math.round((weekly.current / weekly.target) * 100))} />
+            </div>
+          </Card>
+        </>
+      )}
+
+
+
       {/* Painel do dia */}
       <SectionLabel>Painel do dia</SectionLabel>
       <Card className="flex items-center gap-4">
