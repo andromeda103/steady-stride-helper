@@ -252,12 +252,13 @@ function WeeklyEditor({
   setWeeklyProgress,
 }: {
   weekly: ReturnType<typeof useStore.getState>["weekly"];
-  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
   setWeeklyProgress: (n: number) => void;
 }) {
   const [label, setLabel] = useState("");
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("");
+  const [deadline, setDeadline] = useState(endOfWeekKey());
 
   if (weekly) {
     const info = missionInfo(weekly);
