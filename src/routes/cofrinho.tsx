@@ -340,6 +340,16 @@ function WeeklyEditor({
           className="flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
         />
       </div>
+      <label className="block text-xs text-muted-foreground">
+        Prazo final
+        <input
+          type="date"
+          value={deadline}
+          min={todayKey()}
+          onChange={(e) => setDeadline(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm text-foreground"
+        />
+      </label>
       <button
         onClick={() => {
           const t = parseFloat(target.replace(",", "."));
@@ -347,16 +357,18 @@ function WeeklyEditor({
             toast("Preencha o objetivo e a meta");
             return;
           }
-          setWeekly({ label: label.trim(), target: t, unit: unit.trim() || "" });
+          setWeekly({ label: label.trim(), target: t, unit: unit.trim() || "", deadline: deadline || endOfWeekKey() });
           setLabel("");
           setTarget("");
           setUnit("");
-          toast("Missão da semana criada 🔥");
+          setDeadline(endOfWeekKey());
+          toast("Missão Principal criada 🔥");
         }}
         className="no-tap w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground"
       >
-        Criar missão da semana
+        Criar Missão Principal
       </button>
     </Card>
+
   );
 }
