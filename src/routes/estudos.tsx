@@ -19,6 +19,7 @@ function Estudos() {
   const pomodoro = useStore((s) => s.pomodoro);
   const setPomodoro = useStore((s) => s.setPomodoro);
   const logStudy = useStore((s) => s.logStudy);
+  const addPomodoroMinutes = useStore((s) => s.addPomodoroMinutes);
   const addSubject = useStore((s) => s.addSubject);
   const deleteSubject = useStore((s) => s.deleteSubject);
 
