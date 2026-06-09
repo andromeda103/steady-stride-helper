@@ -28,9 +28,25 @@ function Voce() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const lvl = levelInfo(xp);
   const today = todayKey();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    toast("Você saiu", { description: "Os dados continuam neste aparelho." });
+    navigate({ to: "/voce" });
+  }
+
+  async function handleSyncNow() {
+    const status = await syncNow();
+    if (status === "synced") toast("Tudo sincronizado");
+    else if (status === "offline") toast("Sem internet", { description: "Vamos sincronizar quando voltar." });
+    else if (status === "error") toast("Erro ao sincronizar", { description: "Tente novamente." });
+  }
+
 
   const tasksDone = tasks.filter((t) => isDoneToday(t.lastDone)).length;
   const habitsDone = habits.filter((h) => isDoneToday(h.lastDone)).length;
