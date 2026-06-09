@@ -130,6 +130,7 @@ function RootComponent() {
 
   useEffect(() => {
     void notificationService.init();
+    initSync();
   }, []);
 
   return (
