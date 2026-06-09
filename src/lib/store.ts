@@ -434,15 +434,76 @@ export const useStore = create<State>()(
       toggleHabit: (id) =>
         set((s) => {
           const today = todayKey();
-          let gained = 0;
-          const habits = s.habits.map((h) => {
-            if (h.id !== id) return h;
-            const willDo = h.lastDone !== today;
-            gained = willDo ? 5 : -5;
-            return { ...h, lastDone: willDo ? today : null };
-          });
-          return { habits, xp: Math.max(0, s.xp + gained), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const wasDone = h.target > 0 && cur >= h.target;
+          const habits = setHabitToday(s.habits, id, wasDone ? 0 : h.target);
+          const xp = Math.max(0, s.xp + (wasDone ? -5 : 5));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
         }),
+
+      incHabit: (id, delta) =>
+        set((s) => {
+          const today = todayKey();
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const next = Math.max(0, cur + delta);
+          const wasDone = h.target > 0 && cur >= h.target;
+          const isDone = h.target > 0 && next >= h.target;
+          const habits = setHabitToday(s.habits, id, next);
+          const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
+      setHabitProgress: (id, value) =>
+        set((s) => {
+          const today = todayKey();
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const wasDone = h.target > 0 && cur >= h.target;
+          const isDone = h.target > 0 && value >= h.target;
+          const habits = setHabitToday(s.habits, id, value);
+          const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
+      addHabit: (h) =>
+        set((s) => ({
+          habits: [...s.habits, { ...h, id: uid(), logByDay: {}, lastDone: null }],
+        })),
+
+      addHabitsFromTemplate: (items) =>
+        set((s) => ({
+          habits: [...s.habits, ...items.map((it) => ({ ...it, id: uid(), logByDay: {}, lastDone: null }))],
+        })),
+
+      deleteHabit: (id) =>
+        set((s) => ({
+          habits: s.habits.filter((h) => h.id !== id),
+          cofrinho: { ...s.cofrinho, requiredHabitIds: s.cofrinho.requiredHabitIds.filter((x) => x !== id) },
+        })),
+
+      addPomodoroMinutes: (minutes) =>
+        set((s) => {
+          const today = todayKey();
+          let habits = s.habits;
+          let xpGain = 0;
+          for (const h of s.habits) {
+            if (h.mode !== "time" || !h.pomodoroLinked) continue;
+            const cur = h.logByDay[today] ?? 0;
+            const next = cur + minutes;
+            const wasDone = h.target > 0 && cur >= h.target;
+            const isDone = h.target > 0 && next >= h.target;
+            habits = setHabitToday(habits, h.id, next);
+            if (isDone && !wasDone) xpGain += 5;
+          }
+          if (habits === s.habits) return {};
+          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
 
       addSubject: (name) =>
         set((s) => ({ subjects: [...s.subjects, { id: uid(), name, sessions: 0, totalSeconds: 0 }] })),
