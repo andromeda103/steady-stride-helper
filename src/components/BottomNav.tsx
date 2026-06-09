@@ -1,18 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import { Home, ListChecks, BookOpen, Dumbbell, User } from "lucide-react";
+import { Home, ListChecks, BookOpen, Dumbbell, User, PiggyBank } from "lucide-react";
 
 const ITEMS = [
   { to: "/", label: "Início", icon: Home },
   { to: "/rotina", label: "Rotina", icon: ListChecks },
   { to: "/estudos", label: "Estudos", icon: BookOpen },
   { to: "/corpo", label: "Corpo", icon: Dumbbell },
+  { to: "/cofrinho", label: "Cofrinho", icon: PiggyBank },
   { to: "/voce", label: "Você", icon: User },
 ] as const;
 
 export function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md border-t border-border bg-card/95 backdrop-blur">
-      <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)]">
+      <div className="grid grid-cols-6 px-1 pb-[env(safe-area-inset-bottom)]">
+
         {ITEMS.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}

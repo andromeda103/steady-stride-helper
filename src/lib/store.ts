@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { todayKey, daysBetween } from "./dates";
+import { todayKey, daysBetween, startOfWeekKey } from "./dates";
 
 export type Category =
   | "Estudos"
@@ -148,6 +148,48 @@ export interface Mission {
   date: string;
 }
 
+export interface RewardGoal {
+  id: string;
+  name: string;
+  target: number; // R$
+}
+
+export interface RewardRedeem {
+  id: string;
+  name: string;
+  amount: number; // R$
+  date: string; // date key
+}
+
+export interface WeeklyMission {
+  id: string;
+  label: string;
+  target: number;
+  current: number;
+  unit: string; // ex: "horas", "questões", "treinos"
+  weekStart: string; // startOfWeekKey
+}
+
+export interface Cofrinho {
+  dailyAmount: number; // R$ por dia perfeito
+  requiredHabitIds: string[]; // hábitos marcados como obrigatórios
+  balance: number; // saldo acumulado (ganho - resgatado)
+  earnedByDay: Record<string, number>; // date -> R$ ganho
+  perfectDays: string[]; // date keys de dias perfeitos
+  goals: RewardGoal[];
+  history: RewardRedeem[];
+}
+
+export const DEFAULT_COFRINHO: Cofrinho = {
+  dailyAmount: 10,
+  requiredHabitIds: [],
+  balance: 0,
+  earnedByDay: {},
+  perfectDays: [],
+  goals: [],
+  history: [],
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   primaryColor: "oklch(0.78 0.17 152)",
   secondaryColor: "oklch(0.7 0.16 250)",
@@ -188,6 +230,8 @@ interface State {
   notifLog: NotifEvent[];
   scheduled: ScheduledNotif[];
   lastActiveAt: number;
+  cofrinho: Cofrinho;
+  weekly: WeeklyMission | null;
 
   // actions
   toggleTask: (id: string) => void;
@@ -231,9 +275,37 @@ interface State {
   addScheduled: (s: ScheduledNotif) => void;
   removeScheduled: (id: string) => void;
   touchActive: () => void;
+
+  // cofrinho actions
+  setDailyAmount: (amount: number) => void;
+  toggleRequiredHabit: (habitId: string) => void;
+  recomputeCofrinho: () => void;
+  addRewardGoal: (name: string, target: number) => void;
+  deleteRewardGoal: (id: string) => void;
+  redeemReward: (name: string, amount: number) => void;
+
+  // weekly mission actions
+  setWeekly: (m: { label: string; target: number; unit: string } | null) => void;
+  setWeeklyProgress: (current: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+// Recompute today's cofrinho earning based on required habits completion.
+function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
+  const today = todayKey();
+  const required = habits.filter((h) => cofrinho.requiredHabitIds.includes(h.id));
+  const allDone = required.length > 0 && required.every((h) => h.lastDone === today);
+  const wasEarned = cofrinho.earnedByDay[today] || 0;
+  const shouldEarn = allDone ? cofrinho.dailyAmount : 0;
+  if (wasEarned === shouldEarn) return cofrinho;
+  const balance = cofrinho.balance - wasEarned + shouldEarn;
+  const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
+  const perfectDays = allDone
+    ? Array.from(new Set([...cofrinho.perfectDays, today]))
+    : cofrinho.perfectDays.filter((d) => d !== today);
+  return { ...cofrinho, balance, earnedByDay, perfectDays };
+}
 
 function recomputeHistory(tasks: Task[]): Record<string, number> {
   const today = todayKey();
@@ -303,6 +375,8 @@ export const useStore = create<State>()(
       notifLog: [],
       scheduled: [],
       lastActiveAt: Date.now(),
+      cofrinho: DEFAULT_COFRINHO,
+      weekly: null,
 
       toggleTask: (id) =>
         set((s) => {
@@ -343,7 +417,7 @@ export const useStore = create<State>()(
             gained = willDo ? 5 : -5;
             return { ...h, lastDone: willDo ? today : null };
           });
-          return { habits, xp: Math.max(0, s.xp + gained) };
+          return { habits, xp: Math.max(0, s.xp + gained), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
         }),
 
       addSubject: (name) =>
@@ -461,10 +535,55 @@ export const useStore = create<State>()(
       removeScheduled: (id) => set((s) => ({ scheduled: s.scheduled.filter((x) => x.id !== id) })),
 
       touchActive: () => set({ lastActiveAt: Date.now() }),
+
+      setDailyAmount: (amount) =>
+        set((s) => ({ cofrinho: applyCofrinhoToday({ ...s.cofrinho, dailyAmount: Math.max(0, amount) }, s.habits) })),
+
+      toggleRequiredHabit: (habitId) =>
+        set((s) => {
+          const has = s.cofrinho.requiredHabitIds.includes(habitId);
+          const requiredHabitIds = has
+            ? s.cofrinho.requiredHabitIds.filter((x) => x !== habitId)
+            : [...s.cofrinho.requiredHabitIds, habitId];
+          return { cofrinho: applyCofrinhoToday({ ...s.cofrinho, requiredHabitIds }, s.habits) };
+        }),
+
+      recomputeCofrinho: () =>
+        set((s) => ({ cofrinho: applyCofrinhoToday(s.cofrinho, s.habits) })),
+
+      addRewardGoal: (name, target) =>
+        set((s) => ({
+          cofrinho: { ...s.cofrinho, goals: [...s.cofrinho.goals, { id: uid(), name, target: Math.max(1, target) }] },
+        })),
+
+      deleteRewardGoal: (id) =>
+        set((s) => ({ cofrinho: { ...s.cofrinho, goals: s.cofrinho.goals.filter((g) => g.id !== id) } })),
+
+      redeemReward: (name, amount) =>
+        set((s) => {
+          if (amount > s.cofrinho.balance) return {};
+          return {
+            cofrinho: {
+              ...s.cofrinho,
+              balance: s.cofrinho.balance - amount,
+              history: [{ id: uid(), name, amount, date: todayKey() }, ...s.cofrinho.history],
+            },
+          };
+        }),
+
+      setWeekly: (m) =>
+        set(() =>
+          m
+            ? { weekly: { id: uid(), label: m.label, target: Math.max(1, m.target), current: 0, unit: m.unit, weekStart: startOfWeekKey() } }
+            : { weekly: null },
+        ),
+
+      setWeeklyProgress: (current) =>
+        set((s) => (s.weekly ? { weekly: { ...s.weekly, current: Math.max(0, current) } } : {})),
     }),
     {
       name: "levelup-store",
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
         if (version < 2) {
@@ -477,6 +596,10 @@ export const useStore = create<State>()(
           if (!state.notifLog) state.notifLog = [];
           if (!state.scheduled) state.scheduled = [];
           if (state.lastActiveAt == null) state.lastActiveAt = Date.now();
+        }
+        if (version < 3) {
+          if (!state.cofrinho) state.cofrinho = DEFAULT_COFRINHO;
+          if (state.weekly === undefined) state.weekly = null;
         }
         return state as unknown as State;
       },

@@ -14,6 +14,7 @@ import { Route as RotinaRouteImport } from './routes/rotina'
 import { Route as NotificacoesRouteImport } from './routes/notificacoes'
 import { Route as EstudosRouteImport } from './routes/estudos'
 import { Route as CorpoRouteImport } from './routes/corpo'
+import { Route as CofrinhoRouteImport } from './routes/cofrinho'
 import { Route as IndexRouteImport } from './routes/index'
 
 const VoceRoute = VoceRouteImport.update({
@@ -41,6 +42,11 @@ const CorpoRoute = CorpoRouteImport.update({
   path: '/corpo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CofrinhoRoute = CofrinhoRouteImport.update({
+  id: '/cofrinho',
+  path: '/cofrinho',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,6 +55,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cofrinho': typeof CofrinhoRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/notificacoes': typeof NotificacoesRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cofrinho': typeof CofrinhoRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/notificacoes': typeof NotificacoesRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cofrinho': typeof CofrinhoRoute
   '/corpo': typeof CorpoRoute
   '/estudos': typeof EstudosRoute
   '/notificacoes': typeof NotificacoesRoute
@@ -74,12 +83,27 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/corpo' | '/estudos' | '/notificacoes' | '/rotina' | '/voce'
+  fullPaths:
+    | '/'
+    | '/cofrinho'
+    | '/corpo'
+    | '/estudos'
+    | '/notificacoes'
+    | '/rotina'
+    | '/voce'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/corpo' | '/estudos' | '/notificacoes' | '/rotina' | '/voce'
+  to:
+    | '/'
+    | '/cofrinho'
+    | '/corpo'
+    | '/estudos'
+    | '/notificacoes'
+    | '/rotina'
+    | '/voce'
   id:
     | '__root__'
     | '/'
+    | '/cofrinho'
     | '/corpo'
     | '/estudos'
     | '/notificacoes'
@@ -89,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CofrinhoRoute: typeof CofrinhoRoute
   CorpoRoute: typeof CorpoRoute
   EstudosRoute: typeof EstudosRoute
   NotificacoesRoute: typeof NotificacoesRoute
@@ -133,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CorpoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cofrinho': {
+      id: '/cofrinho'
+      path: '/cofrinho'
+      fullPath: '/cofrinho'
+      preLoaderRoute: typeof CofrinhoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -145,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CofrinhoRoute: CofrinhoRoute,
   CorpoRoute: CorpoRoute,
   EstudosRoute: EstudosRoute,
   NotificacoesRoute: NotificacoesRoute,

@@ -38,6 +38,7 @@ function Home() {
   const xp = useStore((s) => s.xp);
   const badDay = useStore((s) => s.badDay);
   const focus = useStore((s) => s.focus);
+  const weekly = useStore((s) => s.weekly);
   const toggleTask = useStore((s) => s.toggleTask);
   const toggleHabit = useStore((s) => s.toggleHabit);
   const setBadDay = useStore((s) => s.setBadDay);
@@ -178,6 +179,26 @@ function Home() {
           {badDay ? "Dia ruim ativo" : "Dia ruim"}
         </button>
       </div>
+
+      {/* Missão da semana */}
+      {weekly && (
+        <>
+          <SectionLabel>Missão da semana</SectionLabel>
+          <Card>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold">{weekly.label}</p>
+              <span className="text-xs text-muted-foreground">
+                {weekly.current}/{weekly.target} {weekly.unit}
+              </span>
+            </div>
+            <div className="mt-2">
+              <Bar pct={Math.min(100, Math.round((weekly.current / weekly.target) * 100))} />
+            </div>
+          </Card>
+        </>
+      )}
+
+
 
       {/* Painel do dia */}
       <SectionLabel>Painel do dia</SectionLabel>
