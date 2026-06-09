@@ -417,7 +417,7 @@ export const useStore = create<State>()(
             gained = willDo ? 5 : -5;
             return { ...h, lastDone: willDo ? today : null };
           });
-          return { habits, xp: Math.max(0, s.xp + gained) };
+          return { habits, xp: Math.max(0, s.xp + gained), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
         }),
 
       addSubject: (name) =>
