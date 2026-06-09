@@ -128,7 +128,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
-    void initNotificationRuntime();
+    void notificationService.init();
   }, []);
 
   return (
