@@ -260,7 +260,7 @@ function WeeklyEditor({
   const [unit, setUnit] = useState("");
 
   if (weekly) {
-    const pct = Math.min(100, Math.round((weekly.current / weekly.target) * 100));
+    const info = missionInfo(weekly);
     return (
       <Card>
         <div className="flex items-center justify-between">
@@ -270,10 +270,26 @@ function WeeklyEditor({
           </button>
         </div>
         <div className="mt-2">
-          <Bar pct={pct} />
+          <Bar pct={info.pct} />
           <p className="mt-1.5 text-xs text-muted-foreground">
-            {weekly.current} / {weekly.target} {weekly.unit} · {pct}%
+            {weekly.current} / {weekly.target} {weekly.unit} · {info.pct}%
           </p>
+        </div>
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="capitalize">Prazo: {info.deadlineLabel}</span>
+          <span
+            style={{
+              color: info.done
+                ? "var(--primary)"
+                : info.overdue
+                ? "var(--danger)"
+                : info.daysLeft <= 1
+                ? "var(--warning)"
+                : undefined,
+            }}
+          >
+            {info.daysLeftLabel}
+          </span>
         </div>
         <div className="mt-3 flex items-center gap-2">
           <button
@@ -299,6 +315,7 @@ function WeeklyEditor({
       </Card>
     );
   }
+
 
   return (
     <Card className="space-y-2">
