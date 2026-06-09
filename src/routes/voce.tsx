@@ -1,12 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
-import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload } from "lucide-react";
+import { Zap, Trophy, CheckCircle2, BookOpen, Dumbbell, Utensils, Bell, ChevronRight, Palette, Download, Upload, Cloud, LogOut, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useStore, levelInfo, isDoneToday, type DarkMode } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
 import { todayKey, formatHours } from "@/lib/dates";
 import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "@/lib/theme";
 import { exportBackup, importBackup } from "@/lib/backup";
+import { useAuth } from "@/hooks/useAuth";
+import { SyncBadge } from "@/components/SyncBadge";
+import { syncNow } from "@/lib/sync";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/voce")({
   head: () => ({ meta: [{ title: "Você — LevelUp" }] }),
