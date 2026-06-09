@@ -248,6 +248,12 @@ interface State {
   addTask: (t: Omit<Task, "id" | "lastDone">) => void;
   deleteTask: (id: string) => void;
   toggleHabit: (id: string) => void;
+  incHabit: (id: string, delta: number) => void;
+  setHabitProgress: (id: string, value: number) => void;
+  addHabit: (h: Omit<Habit, "id" | "logByDay" | "lastDone">) => void;
+  addHabitsFromTemplate: (items: Array<Omit<Habit, "id" | "logByDay" | "lastDone">>) => void;
+  deleteHabit: (id: string) => void;
+  addPomodoroMinutes: (minutes: number) => void;
   addSubject: (name: string) => void;
   deleteSubject: (id: string) => void;
   logStudy: (subjectId: string, seconds: number) => void;
