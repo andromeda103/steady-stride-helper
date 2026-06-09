@@ -28,6 +28,7 @@ function Voce() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{ file: File; meta: BackupMeta } | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
