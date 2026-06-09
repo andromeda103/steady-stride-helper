@@ -19,6 +19,7 @@ function Estudos() {
   const pomodoro = useStore((s) => s.pomodoro);
   const setPomodoro = useStore((s) => s.setPomodoro);
   const logStudy = useStore((s) => s.logStudy);
+  const addPomodoroMinutes = useStore((s) => s.addPomodoroMinutes);
   const addSubject = useStore((s) => s.addSubject);
   const deleteSubject = useStore((s) => s.deleteSubject);
 
@@ -51,6 +52,7 @@ function Estudos() {
     if (phase === "focus") {
       const subj = subjects.find((s) => s.id === selected);
       logStudy(selected, pomodoro.focusMin * 60);
+      addPomodoroMinutes(pomodoro.focusMin);
       fireNotification("Foco concluído!", `+${pomodoro.focusMin}min em ${subj?.name ?? "estudo"}. Hora do descanso.`);
       setPhase("break");
       setLeft(pomodoro.breakMin * 60);

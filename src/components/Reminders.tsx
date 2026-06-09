@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useStore, pendingTasks } from "@/lib/store";
 import { notificationService } from "@/lib/notification-service";
-import { timeToMinutes, nowMinutes } from "@/lib/dates";
+import { timeToMinutes, nowMinutes, todayKey } from "@/lib/dates";
+import { isHabitDoneOn } from "@/lib/habits";
 
 const REPEAT_MS = 15 * 60 * 1000; // repeat every 15 min until done
 const HOUR = 60 * 60 * 1000;
@@ -36,7 +37,20 @@ export function Reminders() {
         if (t - last < REPEAT_MS) continue;
         void notificationService.notify("LevelUp — Hora de agir", `${task.name} (${task.time})`);
         s.markReminded(task.id);
-        break; // one nudge at a time, stay calm
+        return; // one nudge at a time, stay calm
+      }
+      // Habit time reminders: nudge once per scheduled slot/day while not complete.
+      const day = todayKey();
+      for (const habit of s.habits) {
+        if (habit.times.length === 0 || isHabitDoneOn(habit)) continue;
+        for (const time of habit.times) {
+          if (timeToMinutes(time) > now) continue;
+          const key = `${habit.id}@${time}@${day}`;
+          if (s.lastReminderAt[key]) continue; // already nudged this slot today
+          void notificationService.notify("LevelUp — Hábito", `${habit.icon} ${habit.name} (${time})`);
+          s.markReminded(key);
+          return;
+        }
       }
     }
     check();

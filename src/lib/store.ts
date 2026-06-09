@@ -43,11 +43,19 @@ export interface Task {
   lastDone: string | null; // date key when last completed
 }
 
+export type HabitMode = "count" | "time";
+
 export interface Habit {
   id: string;
   name: string;
   icon: string;
-  lastDone: string | null;
+  category: Category;
+  mode: HabitMode; // "count" = vezes/dia | "time" = minutos/dia
+  target: number; // meta diária (vezes ou minutos)
+  times: string[]; // horários múltiplos (HH:mm) para lembretes
+  pomodoroLinked: boolean; // soma tempo do Pomodoro automaticamente (modo time)
+  logByDay: Record<string, number>; // date -> progresso do dia (vezes ou minutos)
+  lastDone: string | null; // último dia em que a meta foi atingida (compat cofrinho)
 }
 
 export interface Subject {
@@ -240,6 +248,12 @@ interface State {
   addTask: (t: Omit<Task, "id" | "lastDone">) => void;
   deleteTask: (id: string) => void;
   toggleHabit: (id: string) => void;
+  incHabit: (id: string, delta: number) => void;
+  setHabitProgress: (id: string, value: number) => void;
+  addHabit: (h: Omit<Habit, "id" | "logByDay" | "lastDone">) => void;
+  addHabitsFromTemplate: (items: Array<Omit<Habit, "id" | "logByDay" | "lastDone">>) => void;
+  deleteHabit: (id: string) => void;
+  addPomodoroMinutes: (minutes: number) => void;
   addSubject: (name: string) => void;
   deleteSubject: (id: string) => void;
   logStudy: (subjectId: string, seconds: number) => void;
@@ -309,6 +323,19 @@ function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
   return { ...cofrinho, balance, earnedByDay, perfectDays };
 }
 
+// Set today's progress for a habit and keep `lastDone` (target reached) in sync.
+function setHabitToday(habits: Habit[], id: string, value: number): Habit[] {
+  const today = todayKey();
+  return habits.map((h) => {
+    if (h.id !== id) return h;
+    const v = Math.max(0, Math.round(value));
+    const logByDay = { ...h.logByDay, [today]: v };
+    const done = h.target > 0 && v >= h.target;
+    const lastDone = done ? today : h.lastDone === today ? null : h.lastDone;
+    return { ...h, logByDay, lastDone };
+  });
+}
+
 function recomputeHistory(tasks: Task[]): Record<string, number> {
   const today = todayKey();
   const total = tasks.length;
@@ -327,10 +354,11 @@ export const useStore = create<State>()(
         { id: uid(), name: "Fazer treino", time: "18:00", category: "Treino", priority: "Alta", essential: false, lastDone: null },
       ],
       habits: [
-        { id: uid(), name: "Escovar os dentes", icon: "🦷", lastDone: null },
-        { id: uid(), name: "Tomar creatina", icon: "💊", lastDone: null },
-        { id: uid(), name: "Beber água", icon: "💧", lastDone: null },
-        { id: uid(), name: "Dormir no horário", icon: "🌙", lastDone: null },
+        { id: uid(), name: "Escovar os dentes", icon: "🦷", category: "Saúde", mode: "count", target: 3, times: ["07:00", "13:00", "22:00"], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Beber água", icon: "💧", category: "Saúde", mode: "count", target: 8, times: [], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Tomar creatina", icon: "💊", category: "Treino", mode: "count", target: 1, times: ["12:30"], pomodoroLinked: false, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Estudar", icon: "📚", category: "Estudos", mode: "time", target: 240, times: [], pomodoroLinked: true, logByDay: {}, lastDone: null },
+        { id: uid(), name: "Dormir no horário", icon: "🌙", category: "Saúde", mode: "count", target: 1, times: ["22:30"], pomodoroLinked: false, logByDay: {}, lastDone: null },
       ],
       subjects: [
         { id: uid(), name: "Português", sessions: 0, totalSeconds: 0 },
@@ -412,15 +440,76 @@ export const useStore = create<State>()(
       toggleHabit: (id) =>
         set((s) => {
           const today = todayKey();
-          let gained = 0;
-          const habits = s.habits.map((h) => {
-            if (h.id !== id) return h;
-            const willDo = h.lastDone !== today;
-            gained = willDo ? 5 : -5;
-            return { ...h, lastDone: willDo ? today : null };
-          });
-          return { habits, xp: Math.max(0, s.xp + gained), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const wasDone = h.target > 0 && cur >= h.target;
+          const habits = setHabitToday(s.habits, id, wasDone ? 0 : h.target);
+          const xp = Math.max(0, s.xp + (wasDone ? -5 : 5));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
         }),
+
+      incHabit: (id, delta) =>
+        set((s) => {
+          const today = todayKey();
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const next = Math.max(0, cur + delta);
+          const wasDone = h.target > 0 && cur >= h.target;
+          const isDone = h.target > 0 && next >= h.target;
+          const habits = setHabitToday(s.habits, id, next);
+          const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
+      setHabitProgress: (id, value) =>
+        set((s) => {
+          const today = todayKey();
+          const h = s.habits.find((x) => x.id === id);
+          if (!h) return {};
+          const cur = h.logByDay[today] ?? 0;
+          const wasDone = h.target > 0 && cur >= h.target;
+          const isDone = h.target > 0 && value >= h.target;
+          const habits = setHabitToday(s.habits, id, value);
+          const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
+          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
+      addHabit: (h) =>
+        set((s) => ({
+          habits: [...s.habits, { ...h, id: uid(), logByDay: {}, lastDone: null }],
+        })),
+
+      addHabitsFromTemplate: (items) =>
+        set((s) => ({
+          habits: [...s.habits, ...items.map((it) => ({ ...it, id: uid(), logByDay: {}, lastDone: null }))],
+        })),
+
+      deleteHabit: (id) =>
+        set((s) => ({
+          habits: s.habits.filter((h) => h.id !== id),
+          cofrinho: { ...s.cofrinho, requiredHabitIds: s.cofrinho.requiredHabitIds.filter((x) => x !== id) },
+        })),
+
+      addPomodoroMinutes: (minutes) =>
+        set((s) => {
+          const today = todayKey();
+          let habits = s.habits;
+          let xpGain = 0;
+          for (const h of s.habits) {
+            if (h.mode !== "time" || !h.pomodoroLinked) continue;
+            const cur = h.logByDay[today] ?? 0;
+            const next = cur + minutes;
+            const wasDone = h.target > 0 && cur >= h.target;
+            const isDone = h.target > 0 && next >= h.target;
+            habits = setHabitToday(habits, h.id, next);
+            if (isDone && !wasDone) xpGain += 5;
+          }
+          if (habits === s.habits) return {};
+          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+        }),
+
 
       addSubject: (name) =>
         set((s) => ({ subjects: [...s.subjects, { id: uid(), name, sessions: 0, totalSeconds: 0 }] })),
@@ -595,7 +684,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
@@ -621,6 +710,34 @@ export const useStore = create<State>()(
             w.deadline = endOfWeekKey(new Date(ws + "T00:00:00"));
           }
         }
+        if (version < 5) {
+          const today = todayKey();
+          const hs = Array.isArray(state.habits) ? (state.habits as Record<string, unknown>[]) : [];
+          state.habits = hs.map((h) => {
+            const target = typeof h.target === "number" ? h.target : 1;
+            const legacyTime = typeof h.time === "string" ? (h.time as string) : "";
+            const times = Array.isArray(h.times) ? h.times : legacyTime ? [legacyTime] : [];
+            const logByDay =
+              h.logByDay && typeof h.logByDay === "object"
+                ? (h.logByDay as Record<string, number>)
+                : h.lastDone === today
+                  ? { [today]: target }
+                  : {};
+            return {
+              id: typeof h.id === "string" ? h.id : uid(),
+              name: typeof h.name === "string" ? h.name : "Hábito",
+              icon: typeof h.icon === "string" ? h.icon : "✅",
+              category: typeof h.category === "string" ? h.category : "Saúde",
+              mode: h.mode === "time" ? "time" : "count",
+              target,
+              times,
+              pomodoroLinked: !!h.pomodoroLinked,
+              logByDay,
+              lastDone: typeof h.lastDone === "string" ? h.lastDone : null,
+            };
+          });
+        }
+
         return state as unknown as State;
       },
     },
