@@ -4,7 +4,8 @@ import { PiggyBank, Target, Gift, Trash2, Check, Plus, Trophy, CalendarCheck, Co
 import { toast } from "sonner";
 import { useStore, isDoneToday } from "@/lib/store";
 import { Card, PageTitle, Bar, SectionLabel } from "@/components/primitives";
-import { todayKey } from "@/lib/dates";
+import { todayKey, endOfWeekKey } from "@/lib/dates";
+import { missionInfo } from "@/lib/mission";
 
 export const Route = createFileRoute("/cofrinho")({
   head: () => ({ meta: [{ title: "Cofrinho — LevelUp" }] }),
