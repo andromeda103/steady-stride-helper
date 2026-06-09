@@ -15,7 +15,7 @@ import { BottomNav } from "../components/BottomNav";
 import { Reminders } from "../components/Reminders";
 import { ThemeApplier } from "../components/ThemeApplier";
 import { Toaster } from "../components/ui/sonner";
-import { initNotificationRuntime } from "../lib/notify";
+import { notificationService } from "../lib/notification-service";
 
 function NotFoundComponent() {
   return (
