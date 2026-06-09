@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useStore, pendingTasks } from "@/lib/store";
-import { fireNotification } from "@/lib/notify";
+import { notificationService } from "@/lib/notification-service";
 import { timeToMinutes, nowMinutes } from "@/lib/dates";
 
 const REPEAT_MS = 15 * 60 * 1000; // repeat every 15 min until done
@@ -18,7 +18,7 @@ export function Reminders() {
       { ms: 24 * HOUR, msg: "24h sem usar o LevelUp. Que tal uma vitória rápida agora?" },
     ];
     const hit = thresholds.find((t) => gap >= t.ms);
-    if (hit) fireNotification("Sentimos sua falta 👀", hit.msg);
+    if (hit) void notificationService.notify("Sentimos sua falta 👀", hit.msg);
     s.touchActive();
   }, []);
 
@@ -34,7 +34,7 @@ export function Reminders() {
         if (timeToMinutes(task.time) > now) continue; // not due yet
         const last = s.lastReminderAt[task.id] || 0;
         if (t - last < REPEAT_MS) continue;
-        fireNotification("LevelUp — Hora de agir", `${task.name} (${task.time})`);
+        void notificationService.notify("LevelUp — Hora de agir", `${task.name} (${task.time})`);
         s.markReminded(task.id);
         break; // one nudge at a time, stay calm
       }

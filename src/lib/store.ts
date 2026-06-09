@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { todayKey, daysBetween, startOfWeekKey } from "./dates";
+import { getStorage } from "./persistence";
 
 export type Category =
   | "Estudos"
@@ -584,6 +585,7 @@ export const useStore = create<State>()(
     {
       name: "levelup-store",
       version: 3,
+      storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
         if (version < 2) {
