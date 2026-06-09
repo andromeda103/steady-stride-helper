@@ -39,7 +39,7 @@ function Home() {
   const xp = useStore((s) => s.xp);
   const badDay = useStore((s) => s.badDay);
   const focus = useStore((s) => s.focus);
-  const weekly = useStore((s) => s.weekly);
+  
   const toggleTask = useStore((s) => s.toggleTask);
   const toggleHabit = useStore((s) => s.toggleHabit);
   const setBadDay = useStore((s) => s.setBadDay);
