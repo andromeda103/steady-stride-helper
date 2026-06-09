@@ -576,7 +576,17 @@ export const useStore = create<State>()(
       setWeekly: (m) =>
         set(() =>
           m
-            ? { weekly: { id: uid(), label: m.label, target: Math.max(1, m.target), current: 0, unit: m.unit, weekStart: startOfWeekKey() } }
+            ? {
+                weekly: {
+                  id: uid(),
+                  label: m.label,
+                  target: Math.max(1, m.target),
+                  current: 0,
+                  unit: m.unit,
+                  weekStart: startOfWeekKey(),
+                  deadline: m.deadline || endOfWeekKey(),
+                },
+              }
             : { weekly: null },
         ),
 
