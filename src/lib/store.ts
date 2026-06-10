@@ -324,10 +324,14 @@ interface State {
   // cofrinho actions
   setDailyAmount: (amount: number) => void;
   toggleRequiredHabit: (habitId: string) => void;
+  toggleRequiredTask: (taskId: string) => void;
+  setMinStudyMinutes: (minutes: number) => void;
+  setRequireWorkout: (on: boolean) => void;
   recomputeCofrinho: () => void;
   addRewardGoal: (name: string, target: number) => void;
   deleteRewardGoal: (id: string) => void;
   redeemReward: (name: string, amount: number) => void;
+  logCofrinhoEvent: (kind: CofrinhoEventKind, detail: string) => void;
 
   // weekly mission actions
   setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
