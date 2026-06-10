@@ -881,6 +881,8 @@ export const useStore = create<State>()(
             events: Array.isArray(c.events) ? c.events : [],
           };
         }
+
+        return state as unknown as State;
       },
     },
   ),
