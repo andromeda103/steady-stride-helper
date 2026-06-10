@@ -805,7 +805,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
