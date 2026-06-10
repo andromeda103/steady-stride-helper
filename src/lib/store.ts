@@ -170,6 +170,25 @@ export interface RewardRedeem {
   date: string; // date key
 }
 
+/** Lançamento financeiro unificado (entrada + saída). */
+export interface LedgerEntry {
+  id: string;
+  date: string; // date key
+  at: number; // epoch ms (ordenação)
+  amount: number; // +ganho / -gasto
+  reason: string;
+}
+
+export type CofrinhoEventKind = "earned" | "lost" | "amount_changed" | "purchase" | "config" | "test";
+
+/** Evento de auditoria do cofrinho. */
+export interface CofrinhoEvent {
+  id: string;
+  at: number; // epoch ms
+  kind: CofrinhoEventKind;
+  detail: string;
+}
+
 export interface WeeklyMission {
   id: string;
   label: string;
