@@ -521,7 +521,7 @@ export const useStore = create<State>()(
           const wasDone = h.target > 0 && cur >= h.target;
           const habits = setHabitToday(s.habits, id, wasDone ? 0 : h.target);
           const xp = Math.max(0, s.xp + (wasDone ? -5 : 5));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       incHabit: (id, delta) =>
@@ -535,7 +535,7 @@ export const useStore = create<State>()(
           const isDone = h.target > 0 && next >= h.target;
           const habits = setHabitToday(s.habits, id, next);
           const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       setHabitProgress: (id, value) =>
@@ -548,7 +548,7 @@ export const useStore = create<State>()(
           const isDone = h.target > 0 && value >= h.target;
           const habits = setHabitToday(s.habits, id, value);
           const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       addHabit: (h) =>
@@ -582,7 +582,7 @@ export const useStore = create<State>()(
             if (isDone && !wasDone) xpGain += 5;
           }
           if (habits === s.habits) return {};
-          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: recompCof(s, { habits }) };
         }),
 
 
