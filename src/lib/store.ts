@@ -382,6 +382,20 @@ function applyCofrinhoToday(input: CofInputs): Cofrinho {
   return { ...cofrinho, balance, earnedByDay, perfectDays, ledger, events };
 }
 
+// Recompute helper that pulls all relevant slices from the current state,
+// allowing callers to pass freshly-updated arrays as overrides.
+function recompCof(s: State, over?: Partial<CofInputs>): Cofrinho {
+  return applyCofrinhoToday({
+    cofrinho: over?.cofrinho ?? s.cofrinho,
+    habits: over?.habits ?? s.habits,
+    tasks: over?.tasks ?? s.tasks,
+    studyLog: over?.studyLog ?? s.studyLog,
+    workoutLog: over?.workoutLog ?? s.workoutLog,
+  });
+}
+
+
+
 
 // Set today's progress for a habit and keep `lastDone` (target reached) in sync.
 function setHabitToday(habits: Habit[], id: string, value: number): Habit[] {
