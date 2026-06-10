@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { todayKey, daysBetween, startOfWeekKey, endOfWeekKey } from "./dates";
 import { getStorage } from "./persistence";
+import { computeDayStatus, brl } from "./cofrinho";
 
 export type Category =
   | "Estudos"
