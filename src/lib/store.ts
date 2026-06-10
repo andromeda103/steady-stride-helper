@@ -593,15 +593,19 @@ export const useStore = create<State>()(
         set((s) => ({ subjects: s.subjects.filter((x) => x.id !== id) })),
 
       logStudy: (subjectId, seconds) =>
-        set((s) => ({
-          subjects: s.subjects.map((x) =>
-            x.id === subjectId
-              ? { ...x, sessions: x.sessions + 1, totalSeconds: x.totalSeconds + seconds }
-              : x,
-          ),
-          studyLog: [...s.studyLog, { date: todayKey(), subjectId, seconds }],
-          xp: s.xp + Math.max(5, Math.round(seconds / 60)),
-        })),
+        set((s) => {
+          const studyLog = [...s.studyLog, { date: todayKey(), subjectId, seconds }];
+          return {
+            subjects: s.subjects.map((x) =>
+              x.id === subjectId
+                ? { ...x, sessions: x.sessions + 1, totalSeconds: x.totalSeconds + seconds }
+                : x,
+            ),
+            studyLog,
+            xp: s.xp + Math.max(5, Math.round(seconds / 60)),
+            cofrinho: recompCof(s, { studyLog }),
+          };
+        }),
 
       setPomodoro: (focusMin, breakMin) => set({ pomodoro: { focusMin, breakMin } }),
 
