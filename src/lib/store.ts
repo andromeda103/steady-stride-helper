@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { todayKey, daysBetween, startOfWeekKey, endOfWeekKey } from "./dates";
 import { getStorage } from "./persistence";
+import { computeDayStatus, brl } from "./cofrinho";
 
 export type Category =
   | "Estudos"
@@ -170,6 +171,25 @@ export interface RewardRedeem {
   date: string; // date key
 }
 
+/** Lançamento financeiro unificado (entrada + saída). */
+export interface LedgerEntry {
+  id: string;
+  date: string; // date key
+  at: number; // epoch ms (ordenação)
+  amount: number; // +ganho / -gasto
+  reason: string;
+}
+
+export type CofrinhoEventKind = "earned" | "lost" | "amount_changed" | "purchase" | "config" | "test";
+
+/** Evento de auditoria do cofrinho. */
+export interface CofrinhoEvent {
+  id: string;
+  at: number; // epoch ms
+  kind: CofrinhoEventKind;
+  detail: string;
+}
+
 export interface WeeklyMission {
   id: string;
   label: string;
@@ -183,21 +203,31 @@ export interface WeeklyMission {
 export interface Cofrinho {
   dailyAmount: number; // R$ por dia perfeito
   requiredHabitIds: string[]; // hábitos marcados como obrigatórios
+  requiredTaskIds: string[]; // tarefas marcadas como obrigatórias
+  minStudyMinutes: number; // estudo mínimo do dia (0 = desativado)
+  requireWorkout: boolean; // exige treino concluído no dia
   balance: number; // saldo acumulado (ganho - resgatado)
   earnedByDay: Record<string, number>; // date -> R$ ganho
   perfectDays: string[]; // date keys de dias perfeitos
   goals: RewardGoal[];
-  history: RewardRedeem[];
+  history: RewardRedeem[]; // resgates (compat)
+  ledger: LedgerEntry[]; // histórico financeiro unificado
+  events: CofrinhoEvent[]; // log de auditoria
 }
 
 export const DEFAULT_COFRINHO: Cofrinho = {
   dailyAmount: 10,
   requiredHabitIds: [],
+  requiredTaskIds: [],
+  minStudyMinutes: 0,
+  requireWorkout: false,
   balance: 0,
   earnedByDay: {},
   perfectDays: [],
   goals: [],
   history: [],
+  ledger: [],
+  events: [],
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -295,10 +325,14 @@ interface State {
   // cofrinho actions
   setDailyAmount: (amount: number) => void;
   toggleRequiredHabit: (habitId: string) => void;
+  toggleRequiredTask: (taskId: string) => void;
+  setMinStudyMinutes: (minutes: number) => void;
+  setRequireWorkout: (on: boolean) => void;
   recomputeCofrinho: () => void;
   addRewardGoal: (name: string, target: number) => void;
   deleteRewardGoal: (id: string) => void;
   redeemReward: (name: string, amount: number) => void;
+  logCofrinhoEvent: (kind: CofrinhoEventKind, detail: string) => void;
 
   // weekly mission actions
   setWeekly: (m: { label: string; target: number; unit: string; deadline?: string } | null) => void;
@@ -307,21 +341,61 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// Recompute today's cofrinho earning based on required habits completion.
-function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
+function cofEvent(kind: CofrinhoEventKind, detail: string): CofrinhoEvent {
+  return { id: uid(), at: Date.now(), kind, detail };
+}
+
+interface CofInputs {
+  cofrinho: Cofrinho;
+  habits: Habit[];
+  tasks: Task[];
+  studyLog: StudyEntry[];
+  workoutLog: string[];
+}
+
+// Recompute today's cofrinho earning based on ALL required criteria
+// (hábitos + tarefas + estudo mínimo + treino). Keeps ledger/events in sync.
+function applyCofrinhoToday(input: CofInputs): Cofrinho {
+  const { cofrinho, habits, tasks, studyLog, workoutLog } = input;
   const today = todayKey();
-  const required = habits.filter((h) => cofrinho.requiredHabitIds.includes(h.id));
-  const allDone = required.length > 0 && required.every((h) => h.lastDone === today);
+  const status = computeDayStatus(cofrinho, habits, tasks, studyLog, workoutLog);
   const wasEarned = cofrinho.earnedByDay[today] || 0;
-  const shouldEarn = allDone ? cofrinho.dailyAmount : 0;
+  const shouldEarn = status.perfect ? cofrinho.dailyAmount : 0;
   if (wasEarned === shouldEarn) return cofrinho;
-  const balance = cofrinho.balance - wasEarned + shouldEarn;
+
   const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
-  const perfectDays = allDone
+  const perfectDays = status.perfect
     ? Array.from(new Set([...cofrinho.perfectDays, today]))
     : cofrinho.perfectDays.filter((d) => d !== today);
-  return { ...cofrinho, balance, earnedByDay, perfectDays };
+
+  // ledger: remove lançamento de "Dia perfeito" de hoje e recria se ganhou
+  let ledger = cofrinho.ledger.filter((e) => !(e.date === today && e.amount > 0 && e.reason === "Dia perfeito"));
+  let events = cofrinho.events;
+  if (shouldEarn > 0) {
+    ledger = [{ id: uid(), date: today, at: Date.now(), amount: shouldEarn, reason: "Dia perfeito" }, ...ledger];
+    events = [cofEvent("earned", `Recompensa de ${brl(shouldEarn)} liberada (dia perfeito)`), ...events].slice(0, 120);
+  } else if (wasEarned > 0) {
+    events = [cofEvent("lost", `Recompensa de ${brl(wasEarned)} perdida (dia incompleto)`), ...events].slice(0, 120);
+  }
+
+  const balance = ledger.reduce((a, e) => a + e.amount, 0);
+  return { ...cofrinho, balance, earnedByDay, perfectDays, ledger, events };
 }
+
+// Recompute helper that pulls all relevant slices from the current state,
+// allowing callers to pass freshly-updated arrays as overrides.
+function recompCof(s: State, over?: Partial<CofInputs>): Cofrinho {
+  return applyCofrinhoToday({
+    cofrinho: over?.cofrinho ?? s.cofrinho,
+    habits: over?.habits ?? s.habits,
+    tasks: over?.tasks ?? s.tasks,
+    studyLog: over?.studyLog ?? s.studyLog,
+    workoutLog: over?.workoutLog ?? s.workoutLog,
+  });
+}
+
+
+
 
 // Set today's progress for a habit and keep `lastDone` (target reached) in sync.
 function setHabitToday(habits: Habit[], id: string, value: number): Habit[] {
@@ -422,6 +496,7 @@ export const useStore = create<State>()(
             tasks,
             xp: Math.max(0, s.xp + gained),
             history: { ...s.history, ...recomputeHistory(tasks) },
+            cofrinho: recompCof(s, { tasks }),
           };
         }),
 
@@ -446,7 +521,7 @@ export const useStore = create<State>()(
           const wasDone = h.target > 0 && cur >= h.target;
           const habits = setHabitToday(s.habits, id, wasDone ? 0 : h.target);
           const xp = Math.max(0, s.xp + (wasDone ? -5 : 5));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       incHabit: (id, delta) =>
@@ -460,7 +535,7 @@ export const useStore = create<State>()(
           const isDone = h.target > 0 && next >= h.target;
           const habits = setHabitToday(s.habits, id, next);
           const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       setHabitProgress: (id, value) =>
@@ -473,7 +548,7 @@ export const useStore = create<State>()(
           const isDone = h.target > 0 && value >= h.target;
           const habits = setHabitToday(s.habits, id, value);
           const xp = Math.max(0, s.xp + (isDone && !wasDone ? 5 : !isDone && wasDone ? -5 : 0));
-          return { habits, xp, cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp, cofrinho: recompCof(s, { habits }) };
         }),
 
       addHabit: (h) =>
@@ -507,7 +582,7 @@ export const useStore = create<State>()(
             if (isDone && !wasDone) xpGain += 5;
           }
           if (habits === s.habits) return {};
-          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: applyCofrinhoToday(s.cofrinho, habits) };
+          return { habits, xp: Math.max(0, s.xp + xpGain), cofrinho: recompCof(s, { habits }) };
         }),
 
 
@@ -518,15 +593,19 @@ export const useStore = create<State>()(
         set((s) => ({ subjects: s.subjects.filter((x) => x.id !== id) })),
 
       logStudy: (subjectId, seconds) =>
-        set((s) => ({
-          subjects: s.subjects.map((x) =>
-            x.id === subjectId
-              ? { ...x, sessions: x.sessions + 1, totalSeconds: x.totalSeconds + seconds }
-              : x,
-          ),
-          studyLog: [...s.studyLog, { date: todayKey(), subjectId, seconds }],
-          xp: s.xp + Math.max(5, Math.round(seconds / 60)),
-        })),
+        set((s) => {
+          const studyLog = [...s.studyLog, { date: todayKey(), subjectId, seconds }];
+          return {
+            subjects: s.subjects.map((x) =>
+              x.id === subjectId
+                ? { ...x, sessions: x.sessions + 1, totalSeconds: x.totalSeconds + seconds }
+                : x,
+            ),
+            studyLog,
+            xp: s.xp + Math.max(5, Math.round(seconds / 60)),
+            cofrinho: recompCof(s, { studyLog }),
+          };
+        }),
 
       setPomodoro: (focusMin, breakMin) => set({ pomodoro: { focusMin, breakMin } }),
 
@@ -537,9 +616,11 @@ export const useStore = create<State>()(
         set((s) => {
           const today = todayKey();
           const has = s.workoutLog.includes(today);
+          const workoutLog = has ? s.workoutLog.filter((d) => d !== today) : [...s.workoutLog, today];
           return {
-            workoutLog: has ? s.workoutLog.filter((d) => d !== today) : [...s.workoutLog, today],
+            workoutLog,
             xp: Math.max(0, s.xp + (has ? -20 : 20)),
+            cofrinho: recompCof(s, { workoutLog }),
           };
         }),
 
@@ -628,7 +709,18 @@ export const useStore = create<State>()(
       touchActive: () => set({ lastActiveAt: Date.now() }),
 
       setDailyAmount: (amount) =>
-        set((s) => ({ cofrinho: applyCofrinhoToday({ ...s.cofrinho, dailyAmount: Math.max(0, amount) }, s.habits) })),
+        set((s) => {
+          const value = Math.max(0, amount);
+          const prev = s.cofrinho.dailyAmount;
+          let cofrinho = { ...s.cofrinho, dailyAmount: value };
+          if (value !== prev) {
+            cofrinho = {
+              ...cofrinho,
+              events: [cofEvent("amount_changed", `Valor por dia alterado: ${brl(prev)} → ${brl(value)}`), ...cofrinho.events].slice(0, 120),
+            };
+          }
+          return { cofrinho: recompCof(s, { cofrinho }) };
+        }),
 
       toggleRequiredHabit: (habitId) =>
         set((s) => {
@@ -636,11 +728,32 @@ export const useStore = create<State>()(
           const requiredHabitIds = has
             ? s.cofrinho.requiredHabitIds.filter((x) => x !== habitId)
             : [...s.cofrinho.requiredHabitIds, habitId];
-          return { cofrinho: applyCofrinhoToday({ ...s.cofrinho, requiredHabitIds }, s.habits) };
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requiredHabitIds } }) };
         }),
 
-      recomputeCofrinho: () =>
-        set((s) => ({ cofrinho: applyCofrinhoToday(s.cofrinho, s.habits) })),
+      toggleRequiredTask: (taskId) =>
+        set((s) => {
+          const list = s.cofrinho.requiredTaskIds ?? [];
+          const has = list.includes(taskId);
+          const requiredTaskIds = has ? list.filter((x) => x !== taskId) : [...list, taskId];
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requiredTaskIds } }) };
+        }),
+
+      setMinStudyMinutes: (minutes) =>
+        set((s) => {
+          const minStudyMinutes = Math.max(0, Math.round(minutes));
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, minStudyMinutes } }) };
+        }),
+
+      setRequireWorkout: (on) =>
+        set((s) => ({ cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requireWorkout: on } }) })),
+
+      recomputeCofrinho: () => set((s) => ({ cofrinho: recompCof(s) })),
+
+      logCofrinhoEvent: (kind, detail) =>
+        set((s) => ({
+          cofrinho: { ...s.cofrinho, events: [cofEvent(kind, detail), ...s.cofrinho.events].slice(0, 120) },
+        })),
 
       addRewardGoal: (name, target) =>
         set((s) => ({
@@ -653,14 +766,22 @@ export const useStore = create<State>()(
       redeemReward: (name, amount) =>
         set((s) => {
           if (amount > s.cofrinho.balance) return {};
+          const today = todayKey();
+          const ledger = [
+            { id: uid(), date: today, at: Date.now(), amount: -Math.abs(amount), reason: `Compra: ${name}` },
+            ...s.cofrinho.ledger,
+          ];
           return {
             cofrinho: {
               ...s.cofrinho,
-              balance: s.cofrinho.balance - amount,
-              history: [{ id: uid(), name, amount, date: todayKey() }, ...s.cofrinho.history],
+              balance: ledger.reduce((a, e) => a + e.amount, 0),
+              ledger,
+              history: [{ id: uid(), name, amount, date: today }, ...s.cofrinho.history],
+              events: [cofEvent("purchase", `Compra realizada: ${name} (-${brl(amount)})`), ...s.cofrinho.events].slice(0, 120),
             },
           };
         }),
+
 
       setWeekly: (m) =>
         set(() =>
@@ -684,7 +805,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
@@ -736,6 +857,29 @@ export const useStore = create<State>()(
               lastDone: typeof h.lastDone === "string" ? h.lastDone : null,
             };
           });
+        }
+        if (version < 6) {
+          const c = (state.cofrinho ?? {}) as Record<string, unknown>;
+          const earnedByDay = (c.earnedByDay ?? {}) as Record<string, number>;
+          // Reconstrói o ledger a partir dos ganhos diários e do histórico de resgates.
+          const ledger: LedgerEntry[] = [];
+          for (const [date, amount] of Object.entries(earnedByDay)) {
+            if (amount > 0) ledger.push({ id: uid(), date, at: new Date(date + "T12:00:00").getTime(), amount, reason: "Dia perfeito" });
+          }
+          const hist = Array.isArray(c.history) ? (c.history as RewardRedeem[]) : [];
+          for (const r of hist) {
+            ledger.push({ id: uid(), date: r.date, at: new Date(r.date + "T12:00:00").getTime(), amount: -Math.abs(r.amount), reason: `Compra: ${r.name}` });
+          }
+          ledger.sort((a, b) => b.at - a.at);
+          state.cofrinho = {
+            ...DEFAULT_COFRINHO,
+            ...c,
+            requiredTaskIds: Array.isArray(c.requiredTaskIds) ? c.requiredTaskIds : [],
+            minStudyMinutes: typeof c.minStudyMinutes === "number" ? c.minStudyMinutes : 0,
+            requireWorkout: !!c.requireWorkout,
+            ledger: Array.isArray(c.ledger) ? c.ledger : ledger,
+            events: Array.isArray(c.events) ? c.events : [],
+          };
         }
 
         return state as unknown as State;
