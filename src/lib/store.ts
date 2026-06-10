@@ -616,9 +616,11 @@ export const useStore = create<State>()(
         set((s) => {
           const today = todayKey();
           const has = s.workoutLog.includes(today);
+          const workoutLog = has ? s.workoutLog.filter((d) => d !== today) : [...s.workoutLog, today];
           return {
-            workoutLog: has ? s.workoutLog.filter((d) => d !== today) : [...s.workoutLog, today],
+            workoutLog,
             xp: Math.max(0, s.xp + (has ? -20 : 20)),
+            cofrinho: recompCof(s, { workoutLog }),
           };
         }),
 
