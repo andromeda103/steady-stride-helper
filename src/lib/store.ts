@@ -709,7 +709,18 @@ export const useStore = create<State>()(
       touchActive: () => set({ lastActiveAt: Date.now() }),
 
       setDailyAmount: (amount) =>
-        set((s) => ({ cofrinho: applyCofrinhoToday({ ...s.cofrinho, dailyAmount: Math.max(0, amount) }, s.habits) })),
+        set((s) => {
+          const value = Math.max(0, amount);
+          const prev = s.cofrinho.dailyAmount;
+          let cofrinho = { ...s.cofrinho, dailyAmount: value };
+          if (value !== prev) {
+            cofrinho = {
+              ...cofrinho,
+              events: [cofEvent("amount_changed", `Valor por dia alterado: ${brl(prev)} → ${brl(value)}`), ...cofrinho.events].slice(0, 120),
+            };
+          }
+          return { cofrinho: recompCof(s, { cofrinho }) };
+        }),
 
       toggleRequiredHabit: (habitId) =>
         set((s) => {
@@ -717,11 +728,32 @@ export const useStore = create<State>()(
           const requiredHabitIds = has
             ? s.cofrinho.requiredHabitIds.filter((x) => x !== habitId)
             : [...s.cofrinho.requiredHabitIds, habitId];
-          return { cofrinho: applyCofrinhoToday({ ...s.cofrinho, requiredHabitIds }, s.habits) };
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requiredHabitIds } }) };
         }),
 
-      recomputeCofrinho: () =>
-        set((s) => ({ cofrinho: applyCofrinhoToday(s.cofrinho, s.habits) })),
+      toggleRequiredTask: (taskId) =>
+        set((s) => {
+          const list = s.cofrinho.requiredTaskIds ?? [];
+          const has = list.includes(taskId);
+          const requiredTaskIds = has ? list.filter((x) => x !== taskId) : [...list, taskId];
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requiredTaskIds } }) };
+        }),
+
+      setMinStudyMinutes: (minutes) =>
+        set((s) => {
+          const minStudyMinutes = Math.max(0, Math.round(minutes));
+          return { cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, minStudyMinutes } }) };
+        }),
+
+      setRequireWorkout: (on) =>
+        set((s) => ({ cofrinho: recompCof(s, { cofrinho: { ...s.cofrinho, requireWorkout: on } }) })),
+
+      recomputeCofrinho: () => set((s) => ({ cofrinho: recompCof(s) })),
+
+      logCofrinhoEvent: (kind, detail) =>
+        set((s) => ({
+          cofrinho: { ...s.cofrinho, events: [cofEvent(kind, detail), ...s.cofrinho.events].slice(0, 120) },
+        })),
 
       addRewardGoal: (name, target) =>
         set((s) => ({
@@ -734,14 +766,22 @@ export const useStore = create<State>()(
       redeemReward: (name, amount) =>
         set((s) => {
           if (amount > s.cofrinho.balance) return {};
+          const today = todayKey();
+          const ledger = [
+            { id: uid(), date: today, at: Date.now(), amount: -Math.abs(amount), reason: `Compra: ${name}` },
+            ...s.cofrinho.ledger,
+          ];
           return {
             cofrinho: {
               ...s.cofrinho,
-              balance: s.cofrinho.balance - amount,
-              history: [{ id: uid(), name, amount, date: todayKey() }, ...s.cofrinho.history],
+              balance: ledger.reduce((a, e) => a + e.amount, 0),
+              ledger,
+              history: [{ id: uid(), name, amount, date: today }, ...s.cofrinho.history],
+              events: [cofEvent("purchase", `Compra realizada: ${name} (-${brl(amount)})`), ...s.cofrinho.events].slice(0, 120),
             },
           };
         }),
+
 
       setWeekly: (m) =>
         set(() =>
