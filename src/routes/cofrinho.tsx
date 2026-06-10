@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  PiggyBank, Target, Gift, Trash2, Check, Plus, Trophy, CalendarCheck, Coins,
+  PiggyBank, Target, Gift, Trash2, Check, Plus, CalendarCheck, Coins,
   Save, FlaskConical, CheckCircle2, XCircle, TrendingUp, TrendingDown, Flame,
   ScrollText, BookOpen, Dumbbell, ListChecks, Sparkles,
 } from "lucide-react";
