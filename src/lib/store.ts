@@ -496,6 +496,7 @@ export const useStore = create<State>()(
             tasks,
             xp: Math.max(0, s.xp + gained),
             history: { ...s.history, ...recomputeHistory(tasks) },
+            cofrinho: recompCof(s, { tasks }),
           };
         }),
 
