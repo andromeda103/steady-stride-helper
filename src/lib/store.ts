@@ -858,8 +858,29 @@ export const useStore = create<State>()(
             };
           });
         }
-
-        return state as unknown as State;
+        if (version < 6) {
+          const c = (state.cofrinho ?? {}) as Record<string, unknown>;
+          const earnedByDay = (c.earnedByDay ?? {}) as Record<string, number>;
+          // Reconstrói o ledger a partir dos ganhos diários e do histórico de resgates.
+          const ledger: LedgerEntry[] = [];
+          for (const [date, amount] of Object.entries(earnedByDay)) {
+            if (amount > 0) ledger.push({ id: uid(), date, at: new Date(date + "T12:00:00").getTime(), amount, reason: "Dia perfeito" });
+          }
+          const hist = Array.isArray(c.history) ? (c.history as RewardRedeem[]) : [];
+          for (const r of hist) {
+            ledger.push({ id: uid(), date: r.date, at: new Date(r.date + "T12:00:00").getTime(), amount: -Math.abs(r.amount), reason: `Compra: ${r.name}` });
+          }
+          ledger.sort((a, b) => b.at - a.at);
+          state.cofrinho = {
+            ...DEFAULT_COFRINHO,
+            ...c,
+            requiredTaskIds: Array.isArray(c.requiredTaskIds) ? c.requiredTaskIds : [],
+            minStudyMinutes: typeof c.minStudyMinutes === "number" ? c.minStudyMinutes : 0,
+            requireWorkout: !!c.requireWorkout,
+            ledger: Array.isArray(c.ledger) ? c.ledger : ledger,
+            events: Array.isArray(c.events) ? c.events : [],
+          };
+        }
       },
     },
   ),
