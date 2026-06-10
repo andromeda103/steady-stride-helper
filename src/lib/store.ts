@@ -341,21 +341,47 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// Recompute today's cofrinho earning based on required habits completion.
-function applyCofrinhoToday(cofrinho: Cofrinho, habits: Habit[]): Cofrinho {
+function cofEvent(kind: CofrinhoEventKind, detail: string): CofrinhoEvent {
+  return { id: uid(), at: Date.now(), kind, detail };
+}
+
+interface CofInputs {
+  cofrinho: Cofrinho;
+  habits: Habit[];
+  tasks: Task[];
+  studyLog: StudyEntry[];
+  workoutLog: string[];
+}
+
+// Recompute today's cofrinho earning based on ALL required criteria
+// (hábitos + tarefas + estudo mínimo + treino). Keeps ledger/events in sync.
+function applyCofrinhoToday(input: CofInputs): Cofrinho {
+  const { cofrinho, habits, tasks, studyLog, workoutLog } = input;
   const today = todayKey();
-  const required = habits.filter((h) => cofrinho.requiredHabitIds.includes(h.id));
-  const allDone = required.length > 0 && required.every((h) => h.lastDone === today);
+  const status = computeDayStatus(cofrinho, habits, tasks, studyLog, workoutLog);
   const wasEarned = cofrinho.earnedByDay[today] || 0;
-  const shouldEarn = allDone ? cofrinho.dailyAmount : 0;
+  const shouldEarn = status.perfect ? cofrinho.dailyAmount : 0;
   if (wasEarned === shouldEarn) return cofrinho;
-  const balance = cofrinho.balance - wasEarned + shouldEarn;
+
   const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
-  const perfectDays = allDone
+  const perfectDays = status.perfect
     ? Array.from(new Set([...cofrinho.perfectDays, today]))
     : cofrinho.perfectDays.filter((d) => d !== today);
-  return { ...cofrinho, balance, earnedByDay, perfectDays };
+
+  // ledger: remove lançamento de "Dia perfeito" de hoje e recria se ganhou
+  let ledger = cofrinho.ledger.filter((e) => !(e.date === today && e.amount > 0 && e.reason === "Dia perfeito"));
+  let events = cofrinho.events;
+  if (shouldEarn > 0) {
+    ledger = [{ id: uid(), date: today, at: Date.now(), amount: shouldEarn, reason: "Dia perfeito" }, ...ledger];
+    events = [cofEvent("earned", `Recompensa de ${brl(shouldEarn)} liberada (dia perfeito)`), ...events].slice(0, 120);
+  } else if (wasEarned > 0) {
+    events = [cofEvent("lost", `Recompensa de ${brl(wasEarned)} perdida (dia incompleto)`), ...events].slice(0, 120);
+  }
+
+  const balance = ledger.reduce((a, e) => a + e.amount, 0);
+  return { ...cofrinho, balance, earnedByDay, perfectDays, ledger, events };
 }
+
 
 // Set today's progress for a habit and keep `lastDone` (target reached) in sync.
 function setHabitToday(habits: Habit[], id: string, value: number): Habit[] {
