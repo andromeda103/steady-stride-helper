@@ -202,21 +202,31 @@ export interface WeeklyMission {
 export interface Cofrinho {
   dailyAmount: number; // R$ por dia perfeito
   requiredHabitIds: string[]; // hábitos marcados como obrigatórios
+  requiredTaskIds: string[]; // tarefas marcadas como obrigatórias
+  minStudyMinutes: number; // estudo mínimo do dia (0 = desativado)
+  requireWorkout: boolean; // exige treino concluído no dia
   balance: number; // saldo acumulado (ganho - resgatado)
   earnedByDay: Record<string, number>; // date -> R$ ganho
   perfectDays: string[]; // date keys de dias perfeitos
   goals: RewardGoal[];
-  history: RewardRedeem[];
+  history: RewardRedeem[]; // resgates (compat)
+  ledger: LedgerEntry[]; // histórico financeiro unificado
+  events: CofrinhoEvent[]; // log de auditoria
 }
 
 export const DEFAULT_COFRINHO: Cofrinho = {
   dailyAmount: 10,
   requiredHabitIds: [],
+  requiredTaskIds: [],
+  minStudyMinutes: 0,
+  requireWorkout: false,
   balance: 0,
   earnedByDay: {},
   perfectDays: [],
   goals: [],
   history: [],
+  ledger: [],
+  events: [],
 };
 
 export const DEFAULT_SETTINGS: Settings = {
