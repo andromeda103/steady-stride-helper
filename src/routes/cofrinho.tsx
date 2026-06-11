@@ -330,16 +330,16 @@ function Cofrinho() {
             value={goalName}
             onChange={(e) => setGoalName(e.target.value)}
             placeholder="Ex: Mouse Gamer"
-            className="flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className="min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
           />
           <input
             value={goalTarget}
             onChange={(e) => setGoalTarget(e.target.value)}
             inputMode="decimal"
             placeholder="R$"
-            className="w-20 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+            className="w-20 shrink-0 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
           />
-          <button onClick={addGoal} className="no-tap flex items-center justify-center rounded-xl bg-primary px-3 text-primary-foreground">
+          <button onClick={addGoal} className="no-tap flex shrink-0 items-center justify-center rounded-xl bg-primary px-3 text-primary-foreground">
             <Plus className="h-4 w-4" strokeWidth={3} />
           </button>
         </div>
