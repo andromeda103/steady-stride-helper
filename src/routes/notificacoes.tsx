@@ -16,18 +16,17 @@ import {
   PlayCircle,
   Globe,
   Bot,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useStore, type NotifKind } from "@/lib/store";
 import { Card, PageTitle, SectionLabel } from "@/components/primitives";
 import {
-  currentPermission,
-  requestNotificationPermission,
-  fireNotification,
-  scheduleNotification,
   cancelScheduled,
   getNotificationDiagnosticSnapshot,
 } from "@/lib/notify";
+import { notificationService, getNotificationMode } from "@/lib/notification-service";
+import { getPlatform } from "@/lib/platform";
 
 export const Route = createFileRoute("/notificacoes")({
   head: () => ({ meta: [{ title: "Diagnóstico de Notificações — LevelUp" }] }),
@@ -55,6 +54,12 @@ function Diagnostico() {
   const setNotifPermission = useStore((s) => s.setNotifPermission);
   const clearNotifLog = useStore((s) => s.clearNotifLog);
 
+  // Environment is resolved once on the client (SSR-safe defaults).
+  const [env, setEnv] = useState<{ mode: "web" | "android"; platform: string }>({ mode: "web", platform: "web" });
+  const isNative = env.mode === "android";
+  const methodLabel = isNative ? "Capacitor Local Notifications" : "Web Notifications / Service Worker";
+  const envLabel = isNative ? "APK Android (Capacitor)" : "Navegador / PWA";
+
   const [perm, setPerm] = useState<string>("default");
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
   const [testResult, setTestResult] = useState<string>("Nenhum teste executado ainda.");
@@ -62,7 +67,8 @@ function Diagnostico() {
 
   useEffect(() => {
     async function loadSnapshot() {
-      const p = currentPermission();
+      setEnv({ mode: getNotificationMode(), platform: getPlatform() });
+      const p = await notificationService.currentPermission();
       setPerm(p);
       if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
       setSnapshot(await getNotificationDiagnosticSnapshot());
@@ -82,32 +88,40 @@ function Diagnostico() {
   const lastError = notifLog.find((e) => e.kind === "error");
 
   async function ask() {
-    const r = await requestNotificationPermission();
+    const r = await notificationService.requestPermission();
     setPerm(r);
     setSnapshot(await getNotificationDiagnosticSnapshot());
     if (r === "granted") {
       setNotifPermission("granted");
-      const result = await fireNotification("Notificações ativadas!", "Tudo certo para receber lembretes.");
+      const result = await notificationService.notify("Notificações ativadas!", "Tudo certo para receber lembretes.");
       setTestResult(result.message);
     } else if (r === "denied") {
       setTestResult("Permissão negada");
-      toast("Permissão negada", { description: "Ative nas permissões do site no navegador/celular." });
+      toast("Permissão negada", { description: "Ative nas permissões do site/app." });
+    } else if (r === "unsupported") {
+      setTestResult(
+        isNative
+          ? "Plugin nativo indisponível neste build."
+          : "Este navegador não suporta notificações web.",
+      );
     }
   }
 
   async function refreshStatus() {
+    setEnv({ mode: getNotificationMode(), platform: getPlatform() });
+    setPerm(await notificationService.currentPermission());
     setSnapshot(await getNotificationDiagnosticSnapshot());
   }
 
   async function runNowTest() {
-    const result = await fireNotification("Teste imediato ✅", "Se você viu isso, está funcionando!");
+    const result = await notificationService.notify("Teste imediato ✅", "Se você viu isso, está funcionando!");
     setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
     await refreshStatus();
   }
 
   async function runScheduledTest(seconds: number) {
-    scheduleNotification(`Teste ${seconds}s ⏱️`, `Notificação agendada há ${seconds} segundos.`, seconds * 1000);
-    setTestResult(`Agendamento criado para ${seconds}s. Se o navegador suspender timers em segundo plano, isso aparecerá no log.`);
+    await notificationService.schedule(`Teste ${seconds}s ⏱️`, `Notificação agendada há ${seconds} segundos.`, seconds * 1000);
+    setTestResult(`Agendamento criado para ${seconds}s usando ${methodLabel}.`);
     toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
     await refreshStatus();
   }
@@ -123,24 +137,53 @@ function Diagnostico() {
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
 
+      {/* Ambiente atual */}
       <Card className="space-y-3">
+        <StatusLine
+          icon={isNative ? <Smartphone className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+          label="Ambiente atual"
+          value={envLabel}
+          color="var(--primary)"
+        />
+        <StatusLine
+          icon={<Bot className="h-4 w-4" />}
+          label="Método usado"
+          value={methodLabel}
+        />
         <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
-        <StatusLine icon={<BellRing className="h-4 w-4" />} label="Notification API" value={snapshot?.notificationApiAvailable ? "Sim" : "Não"} color={snapshot?.notificationApiAvailable ? "var(--primary)" : "var(--danger)"} />
-        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="Service Worker registrado" value={snapshot?.serviceWorkerRegistered ? `Sim · ${snapshot.serviceWorkerState}` : "Não"} color={snapshot?.serviceWorkerRegistered ? "var(--primary)" : "var(--danger)"} />
-        <StatusLine icon={<Bot className="h-4 w-4" />} label="Push Manager" value={snapshot?.pushManagerAvailable ? "Disponível" : "Indisponível"} color={snapshot?.pushManagerAvailable ? "var(--primary)" : "var(--warning)"} />
-        <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Status da PWA" value={snapshot?.pwaStatus === "standalone" ? "Instalada / standalone" : "Navegador"} color={snapshot?.pwaStatus === "standalone" ? "var(--primary)" : "var(--warning)"} />
-        <StatusLine icon={<Globe className="h-4 w-4" />} label="Navegador detectado" value={snapshot?.browser ?? "—"} />
-        <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Sistema operacional" value={snapshot?.os ?? "—"} />
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5" style={{ color: permColor }} />
-            <span className="text-sm font-semibold">Permissão</span>
+      {/* Aviso de ambiente — não é erro crítico */}
+      {!isNative && (
+        <Card className="mt-3 flex items-start gap-2" style={{ borderColor: "color-mix(in oklab, var(--cat-estudos) 40%, transparent)" }}>
+          <Info className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--cat-estudos)" }} />
+          <p className="text-xs text-muted-foreground">
+            Notificações nativas só estarão disponíveis no APK. No navegador, serão usadas notificações web quando
+            suportadas pelo dispositivo.
+          </p>
+        </Card>
+      )}
+
+      {/* Detalhes técnicos (relevantes no navegador) */}
+      {!isNative && (
+        <Card className="mt-3 space-y-3">
+          <StatusLine icon={<BellRing className="h-4 w-4" />} label="Notification API" value={snapshot?.notificationApiAvailable ? "Sim" : "Não"} color={snapshot?.notificationApiAvailable ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="Service Worker" value={snapshot?.serviceWorkerRegistered ? `Sim · ${snapshot.serviceWorkerState}` : "Não registrado"} color={snapshot?.serviceWorkerRegistered ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Bot className="h-4 w-4" />} label="Push Manager" value={snapshot?.pushManagerAvailable ? "Disponível" : "Indisponível"} color={snapshot?.pushManagerAvailable ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Status da PWA" value={snapshot?.pwaStatus === "standalone" ? "Instalada / standalone" : "Navegador"} color={snapshot?.pwaStatus === "standalone" ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Globe className="h-4 w-4" />} label="Navegador" value={snapshot?.browser ?? "—"} />
+          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Sistema" value={snapshot?.os ?? "—"} />
+        </Card>
+      )}
+
+      <Card className="mt-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bell className="h-5 w-5 shrink-0" style={{ color: permColor }} />
+            <span className="truncate text-sm font-semibold">Permissão</span>
           </div>
           <span
-            className="rounded-full px-3 py-1 text-xs font-bold"
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-bold"
             style={{ background: `color-mix(in oklab, ${permColor} 18%, transparent)`, color: permColor }}
           >
             {permLabel}
@@ -148,12 +191,21 @@ function Diagnostico() {
         </div>
         {perm !== "granted" && perm !== "unsupported" && (
           <button onClick={ask} className="no-tap mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground">
-            Permitir notificações
+            {isNative ? "Permitir notificações (POST_NOTIFICATIONS)" : "Permitir notificações"}
           </button>
         )}
         {perm === "denied" && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Bloqueadas pelo navegador. Abra as permissões do site e ative as notificações manualmente.
+            {isNative
+              ? "Bloqueadas pelo sistema. Ative nas configurações do app Android."
+              : "Bloqueadas pelo navegador. Abra as permissões do site e ative as notificações manualmente."}
+          </p>
+        )}
+        {perm === "unsupported" && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {isNative
+              ? "O plugin de notificações nativas não está disponível neste build."
+              : "Este navegador não suporta notificações web. Tudo bem — o app continua funcionando normalmente."}
           </p>
         )}
         <button onClick={refreshStatus} className="no-tap mt-3 w-full rounded-xl border border-border py-2.5 text-sm font-bold">
@@ -166,8 +218,8 @@ function Diagnostico() {
       <div className="grid grid-cols-1 gap-2">
         <StatRow icon={<Send className="h-4 w-4" />} label="Última enviada" value={lastSent ? `${lastSent.title} · ${fmtTime(lastSent.at)}` : "—"} />
         <StatRow icon={<Inbox className="h-4 w-4" />} label="Última recebida" value={lastReceived ? `${lastReceived.title} · ${fmtTime(lastReceived.at)}` : "—"} color="var(--primary)" />
-        <StatRow icon={<AlertTriangle className="h-4 w-4" />} label="Último erro" value={lastError ? `${lastError.detail ?? lastError.title} · ${fmtTime(lastError.at)}` : "Nenhum"} color={lastError ? "var(--danger)" : undefined} />
-        <StatRow icon={<PlayCircle className="h-4 w-4" />} label="Resultado real do teste" value={testResult} color="var(--warning)" />
+        <StatRow icon={<AlertTriangle className="h-4 w-4" />} label="Último erro real" value={lastError ? `${lastError.detail ?? lastError.title} · ${fmtTime(lastError.at)}` : "Nenhum"} color={lastError ? "var(--danger)" : undefined} />
+        <StatRow icon={<PlayCircle className="h-4 w-4" />} label="Último teste executado" value={testResult} color="var(--warning)" />
       </div>
 
       {/* Tests */}
@@ -177,7 +229,7 @@ function Diagnostico() {
           onClick={() => void runNowTest()}
           className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground"
         >
-          <BellRing className="h-4 w-4" /> Testar agora
+          <BellRing className="h-4 w-4" /> Testar agora ({isNative ? "nativo" : "web"})
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -205,12 +257,12 @@ function Diagnostico() {
             const left = Math.max(0, Math.round((s.fireAt - Date.now()) / 1000));
             return (
               <Card key={s.id} className="flex items-center gap-3 p-3">
-                <Clock className="h-4 w-4 text-warning" style={{ color: "var(--warning)" }} />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold">{s.title}</p>
+                <Clock className="h-4 w-4 shrink-0 text-warning" style={{ color: "var(--warning)" }} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{s.title}</p>
                   <p className="text-xs text-muted-foreground">dispara em {left}s</p>
                 </div>
-                <button onClick={() => cancelScheduled(s.id)} className="no-tap p-1 text-muted-foreground">
+                <button onClick={() => cancelScheduled(s.id)} className="no-tap shrink-0 p-1 text-muted-foreground">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </Card>
@@ -252,14 +304,22 @@ function Diagnostico() {
         </Card>
       )}
 
-      <Card className="mt-4 border-warning/40" style={{ borderColor: "color-mix(in oklab, var(--warning) 40%, transparent)" }}>
+      <Card className="mt-4" style={{ borderColor: "color-mix(in oklab, var(--primary) 40%, transparent)" }}>
         <div className="flex items-start gap-2">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--primary)" }} />
           <p className="text-xs text-muted-foreground">
-            Problema encontrado: o app usava <strong>new Notification()</strong>, que não é o caminho compatível no Chrome Android.
-            Correção aplicada: agora o app usa <strong>ServiceWorkerRegistration.showNotification()</strong> e valida Service Worker ativo.
-            Resultado: testes imediatos passam a usar o fluxo compatível com Android; testes agendados ainda dependem de timers locais,
-            então podem falhar se o navegador suspender o app em segundo plano.
+            {isNative ? (
+              <>
+                Você está no <strong>APK Android</strong>: o app usa <strong>Capacitor Local Notifications</strong> com
+                permissão <strong>POST_NOTIFICATIONS</strong> e agendamento nativo (AlarmManager).
+              </>
+            ) : (
+              <>
+                Você está no <strong>navegador/PWA</strong>: o app usa <strong>Web Notifications</strong> via Service
+                Worker quando suportadas. As notificações nativas só ficam disponíveis no APK — isso é esperado e{" "}
+                <strong>não é um erro</strong>.
+              </>
+            )}
           </p>
         </div>
       </Card>
@@ -272,7 +332,7 @@ function Diagnostico() {
 function StatRow({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color?: string }) {
   return (
     <Card className="flex items-center gap-3 p-3">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary" style={color ? { color } : undefined}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary" style={color ? { color } : undefined}>
         {icon}
       </span>
       <div className="min-w-0 flex-1">
@@ -286,7 +346,7 @@ function StatRow({ icon, label, value, color }: { icon: React.ReactNode; label: 
 function StatusLine({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color?: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-secondary p-3">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-background" style={color ? { color } : undefined}>{icon}</span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background" style={color ? { color } : undefined}>{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="truncate text-sm font-semibold" style={color ? { color } : undefined}>{value}</p>

@@ -90,7 +90,12 @@ async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
         };
         return mod.LocalNotifications ?? null;
       } catch (e) {
-        log("error", "Capacitor", `Plugin local-notifications indisponível: ${String(e)}`);
+        // Not a critical error: native plugin is only present inside the APK.
+        log(
+          "service_worker",
+          "Capacitor",
+          `Plugin nativo indisponível (esperado fora do APK): ${String(e)}`,
+        );
         return null;
       }
     })();
