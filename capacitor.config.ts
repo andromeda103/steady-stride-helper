@@ -9,7 +9,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "app.lovable.levelup",
   appName: "LevelUp",
-  // Folder containing the prerendered/static SPA build that gets packed into the APK.
+  // Static web root produced by `npm run build:android` (index.html + assets/).
   webDir: "dist",
   android: {
     backgroundColor: "#121417",
