@@ -23,7 +23,8 @@ export default defineConfig({
     spa: {
       enabled: true,
       prerender: {
-        outputPath: "/",
+        // Writes the SPA shell as `index.html` (the plugin appends `.html`).
+        outputPath: "/index",
         crawlLinks: false,
       },
     },
