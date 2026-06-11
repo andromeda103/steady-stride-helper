@@ -93,8 +93,22 @@
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   * {
     border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   html {
@@ -114,11 +128,26 @@
     letter-spacing: -0.02em;
   }
 
+  /* Media and form controls must never exceed their container on small screens */
+  img, svg, video, canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  input, textarea, select, button {
+    max-width: 100%;
+  }
+
   /* Hide scrollbars for the clean app feel */
   ::-webkit-scrollbar {
     width: 0;
     height: 0;
   }
+}
+
+/* Respect the device safe area at the bottom (notches / gesture bars) */
+@utility pb-safe {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 
 @utility no-tap {
