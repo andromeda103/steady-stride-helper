@@ -33,8 +33,7 @@ export function TodayPriorities() {
   const nextAction: Task | undefined = pend[0];
 
   const workoutDone = workoutLog.includes(today);
-  const essentialHabits = habits.filter((h) => h.essential ?? false);
-  const habitsPool = essentialHabits.length > 0 ? essentialHabits : habits;
+  const habitsPool = habits;
   const habitsDone = habitsPool.filter((h) => isHabitDoneOn(h)).length;
   const habitsTotal = habitsPool.length;
 
