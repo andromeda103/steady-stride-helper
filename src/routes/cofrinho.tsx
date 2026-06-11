@@ -570,13 +570,13 @@ function WeeklyEditor({
           onChange={(e) => setTarget(e.target.value)}
           inputMode="decimal"
           placeholder="Meta (ex: 20)"
-          className="flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
         />
         <input
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
           placeholder="Unidade (horas)"
-          className="flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
         />
       </div>
       <label className="block text-xs text-muted-foreground">
