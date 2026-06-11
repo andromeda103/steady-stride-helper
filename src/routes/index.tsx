@@ -12,6 +12,7 @@ import {
 } from "@/lib/store";
 import { ProgressRing } from "@/components/ProgressRing";
 import { MainMission } from "@/components/MainMission";
+import { TodayPriorities } from "@/components/TodayPriorities";
 import { Card, SectionLabel } from "@/components/primitives";
 import { formatClock } from "@/lib/dates";
 import { isHabitDoneOn, habitPct, formatHabitProgress, habitStep } from "@/lib/habits";
