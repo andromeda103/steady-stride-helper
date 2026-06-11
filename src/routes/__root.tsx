@@ -137,7 +137,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeApplier />
       <Reminders />
-      <div className="mx-auto min-h-screen max-w-md bg-background pb-20">
+      <div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background pb-safe">
         <Outlet />
       </div>
       <BottomNav />
