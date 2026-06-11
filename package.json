@@ -9,7 +9,10 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:android": "vite build --config vite.config.android.ts && node scripts/android-postbuild.mjs",
+    "cap:sync": "npm run build:android && npx cap sync android",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
