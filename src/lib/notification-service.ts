@@ -91,7 +91,7 @@ async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
       try {
         // Static specifier → Vite bundles the plugin into a lazy chunk.
         const mod = await import("@capacitor/local-notifications");
-        const plugin = (mod.LocalNotifications ?? null) as LocalNotificationsPlugin | null;
+        const plugin = (mod.LocalNotifications ?? null) as unknown as LocalNotificationsPlugin | null;
         if (!plugin) {
           lastNativeError = "Módulo carregado mas LocalNotifications ausente.";
         } else {
