@@ -108,6 +108,9 @@
   #root {
     width: 100%;
     max-width: 100%;
+    min-height: 100%;
+    /* Only block horizontal overflow — vertical scroll MUST stay free so the
+       Android WebView can scroll every screen. */
     overflow-x: hidden;
   }
 
@@ -119,9 +122,12 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-body);
-    overscroll-behavior-y: none;
+    /* Vertical scrolling enabled (fixes "can't scroll" inside the APK WebView). */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     -webkit-font-smoothing: antialiased;
   }
+
 
   h1, h2, h3, h4 {
     font-family: var(--font-head);
