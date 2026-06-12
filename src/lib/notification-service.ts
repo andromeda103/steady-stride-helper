@@ -59,9 +59,13 @@ export function getNotificationMode(): NotificationMode {
 }
 
 // ----------------------------------------------------------------------------
-// Capacitor (ANDROID) adapter — lazily loaded so the web bundle never imports
-// the native plugin. The specifier is built dynamically so the web build does
-// not try to resolve `@capacitor/local-notifications` at build time.
+// Capacitor (ANDROID) adapter.
+//
+// `@capacitor/local-notifications` is a real dependency now, so we import it
+// with a STATIC specifier. Vite code-splits it into its own chunk that is
+// bundled into BOTH builds — but it is only ever loaded at runtime inside the
+// native Android shell (getNotificationMode() === "android"). On web the chunk
+// is never executed, so the browser bundle is unaffected.
 // ----------------------------------------------------------------------------
 
 type LocalNotificationsPlugin = {
@@ -79,18 +83,24 @@ type LocalNotificationsPlugin = {
 };
 
 let nativePluginPromise: Promise<LocalNotificationsPlugin | null> | null = null;
+let lastNativeError: string | null = null;
 
 async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
   if (!nativePluginPromise) {
     nativePluginPromise = (async () => {
       try {
-        const specifier = ["@capacitor", "local-notifications"].join("/");
-        const mod = (await import(/* @vite-ignore */ specifier)) as {
-          LocalNotifications?: LocalNotificationsPlugin;
-        };
-        return mod.LocalNotifications ?? null;
+        // Static specifier → Vite bundles the plugin into a lazy chunk.
+        const mod = await import("@capacitor/local-notifications");
+        const plugin = (mod.LocalNotifications ?? null) as LocalNotificationsPlugin | null;
+        if (!plugin) {
+          lastNativeError = "Módulo carregado mas LocalNotifications ausente.";
+        } else {
+          lastNativeError = null;
+        }
+        return plugin;
       } catch (e) {
-        // Not a critical error: native plugin is only present inside the APK.
+        lastNativeError = String(e);
+        // Not a critical error: native plugin only resolves inside the APK.
         log(
           "service_worker",
           "Capacitor",
@@ -101,6 +111,32 @@ async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
     })();
   }
   return nativePluginPromise;
+}
+
+/** Diagnostic snapshot of the native notification adapter. */
+export async function getNativePluginStatus(): Promise<{
+  mode: NotificationMode;
+  pluginAvailable: boolean;
+  permission: "granted" | "denied" | "default" | "unsupported";
+  lastError: string | null;
+}> {
+  const mode = getNotificationMode();
+  if (mode !== "android") {
+    return { mode, pluginAvailable: false, permission: "unsupported", lastError: null };
+  }
+  const plugin = await loadNativePlugin();
+  let permission: "granted" | "denied" | "default" | "unsupported" = "unsupported";
+  if (plugin) {
+    try {
+      const res = await plugin.checkPermissions();
+      permission =
+        res.display === "granted" ? "granted" : res.display === "denied" ? "denied" : "default";
+    } catch (e) {
+      lastNativeError = String(e);
+      permission = "default";
+    }
+  }
+  return { mode, pluginAvailable: !!plugin, permission, lastError: lastNativeError };
 }
 
 // Capacitor notification ids are 32-bit ints; keep a string<->int map for cancel().
