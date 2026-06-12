@@ -115,6 +115,7 @@ function Diagnostico() {
     setEnv({ mode: getNotificationMode(), platform: getPlatform() });
     setPerm(await notificationService.currentPermission());
     setSnapshot(await getNotificationDiagnosticSnapshot());
+    setNativeStatus(await getNativePluginStatus());
   }
 
   async function runNowTest() {
