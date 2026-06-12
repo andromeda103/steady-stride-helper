@@ -151,9 +151,15 @@
   }
 }
 
-/* Respect the device safe area at the bottom (notches / gesture bars) */
+/* Respect the device safe area at the bottom (notches / gesture bars).
+   Leaves room for the fixed bottom navigation so content is never hidden. */
 @utility pb-safe {
-  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(90px + env(safe-area-inset-bottom));
+}
+
+/* Respect the device safe area at the top (status bar / notch on Android). */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
 }
 
 @utility no-tap {
