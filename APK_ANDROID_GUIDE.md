@@ -129,12 +129,63 @@ abre, mas não volta para o app.
 
 ---
 
-## 6. Fluxo resumido (toda vez que mudar o app)
+## 6. Notificações nativas (Capacitor Local Notifications)
+
+O `@capacitor/local-notifications` agora é uma **dependência real** do projeto
+(`package.json`). O `NotificationService` faz `import("@capacitor/local-notifications")`
+estático, então o Vite **empacota o plugin** no build Android. Dentro do APK as
+notificações são **nativas** (AlarmManager); no navegador continuam usando
+**Web Notifications / Service Worker**.
+
+### 6.1 — OBRIGATÓRIO após instalar/atualizar o plugin
+
+Sempre que mudar dependências nativas (ou na primeira vez), rode **nesta ordem**:
 
 ```bash
-npm run cap:sync      # build estática + copia pro Android
+npm install
+npm run build:android
+npx cap sync android
+```
+
+> `npx cap sync android` copia a build **e** instala os plugins nativos no
+> projeto Android. Sem isso o APK mostra "plugin não disponível".
+
+### 6.2 — Permissões no AndroidManifest.xml
+
+Abra `android/app/src/main/AndroidManifest.xml` e adicione, dentro de
+`<manifest>` (antes de `<application>`):
+
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- Necessário para notificações agendadas com horário exato (Android 12+) -->
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+```
+
+No Android 13+ o app pede a permissão `POST_NOTIFICATIONS` em runtime — o botão
+**"Permitir notificações"** na tela de Diagnóstico chama
+`LocalNotifications.requestPermissions()`.
+
+### 6.3 — Tela de Diagnóstico
+
+Em `Você → Diagnóstico de notificações`, dentro do APK você verá:
+
+- **Plugin nativo disponível:** Sim/Não
+- **Permissão Android:** granted / denied / prompt
+- **Último erro real**
+- **Testar agora** → dispara uma notificação nativa imediata
+- **Em 10s / Em 1 min** → agenda notificações nativas
+
+---
+
+## 7. Fluxo resumido (toda vez que mudar o app)
+
+```bash
+npm run cap:sync      # build estática + copia pro Android (build:android + cap sync)
 npm run cap:open      # abre o Android Studio
 #   Build > Build APK(s)
 ```
 
 Pronto — APK gerado a partir do mesmo código do app web. 🎉
+

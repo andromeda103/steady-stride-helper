@@ -25,8 +25,10 @@ import {
   cancelScheduled,
   getNotificationDiagnosticSnapshot,
 } from "@/lib/notify";
-import { notificationService, getNotificationMode } from "@/lib/notification-service";
+import { notificationService, getNotificationMode, getNativePluginStatus } from "@/lib/notification-service";
 import { getPlatform } from "@/lib/platform";
+
+type NativeStatus = Awaited<ReturnType<typeof getNativePluginStatus>>;
 
 export const Route = createFileRoute("/notificacoes")({
   head: () => ({ meta: [{ title: "Diagnóstico de Notificações — LevelUp" }] }),
@@ -62,6 +64,7 @@ function Diagnostico() {
 
   const [perm, setPerm] = useState<string>("default");
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
+  const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
   const [testResult, setTestResult] = useState<string>("Nenhum teste executado ainda.");
   const [, setTick] = useState(0);
 
@@ -72,6 +75,7 @@ function Diagnostico() {
       setPerm(p);
       if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
       setSnapshot(await getNotificationDiagnosticSnapshot());
+      setNativeStatus(await getNativePluginStatus());
     }
     void loadSnapshot();
   }, [setNotifPermission]);
@@ -111,6 +115,7 @@ function Diagnostico() {
     setEnv({ mode: getNotificationMode(), platform: getPlatform() });
     setPerm(await notificationService.currentPermission());
     setSnapshot(await getNotificationDiagnosticSnapshot());
+    setNativeStatus(await getNativePluginStatus());
   }
 
   async function runNowTest() {
@@ -152,6 +157,44 @@ function Diagnostico() {
         />
         <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
       </Card>
+
+      {/* Detalhes nativos (APK Android) */}
+      {isNative && (
+        <Card className="mt-3 space-y-3">
+          <StatusLine
+            icon={<Smartphone className="h-4 w-4" />}
+            label="Plugin nativo disponível"
+            value={nativeStatus?.pluginAvailable ? "Sim" : "Não"}
+            color={nativeStatus?.pluginAvailable ? "var(--primary)" : "var(--danger)"}
+          />
+          <StatusLine
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="Permissão Android"
+            value={
+              nativeStatus?.permission === "granted"
+                ? "granted"
+                : nativeStatus?.permission === "denied"
+                  ? "denied"
+                  : nativeStatus?.permission === "default"
+                    ? "prompt"
+                    : "—"
+            }
+            color={
+              nativeStatus?.permission === "granted"
+                ? "var(--primary)"
+                : nativeStatus?.permission === "denied"
+                  ? "var(--danger)"
+                  : "var(--warning)"
+            }
+          />
+          <StatusLine
+            icon={<AlertTriangle className="h-4 w-4" />}
+            label="Último erro real"
+            value={nativeStatus?.lastError ?? "Nenhum"}
+            color={nativeStatus?.lastError ? "var(--danger)" : undefined}
+          />
+        </Card>
+      )}
 
       {/* Aviso de ambiente — não é erro crítico */}
       {!isNative && (
@@ -239,10 +282,10 @@ function Diagnostico() {
             <Clock className="h-4 w-4" /> Em 10s
           </button>
           <button
-            onClick={() => void runScheduledTest(30)}
+            onClick={() => void runScheduledTest(60)}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
           >
-            <Clock className="h-4 w-4" /> Em 30s
+            <Clock className="h-4 w-4" /> Em 1 min
           </button>
         </div>
       </div>
