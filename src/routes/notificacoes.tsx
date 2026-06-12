@@ -25,8 +25,10 @@ import {
   cancelScheduled,
   getNotificationDiagnosticSnapshot,
 } from "@/lib/notify";
-import { notificationService, getNotificationMode } from "@/lib/notification-service";
+import { notificationService, getNotificationMode, getNativePluginStatus } from "@/lib/notification-service";
 import { getPlatform } from "@/lib/platform";
+
+type NativeStatus = Awaited<ReturnType<typeof getNativePluginStatus>>;
 
 export const Route = createFileRoute("/notificacoes")({
   head: () => ({ meta: [{ title: "Diagnóstico de Notificações — LevelUp" }] }),
