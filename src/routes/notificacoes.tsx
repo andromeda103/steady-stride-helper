@@ -64,6 +64,7 @@ function Diagnostico() {
 
   const [perm, setPerm] = useState<string>("default");
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
+  const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
   const [testResult, setTestResult] = useState<string>("Nenhum teste executado ainda.");
   const [, setTick] = useState(0);
 
@@ -74,6 +75,7 @@ function Diagnostico() {
       setPerm(p);
       if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
       setSnapshot(await getNotificationDiagnosticSnapshot());
+      setNativeStatus(await getNativePluginStatus());
     }
     void loadSnapshot();
   }, [setNotifPermission]);
