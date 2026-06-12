@@ -282,10 +282,10 @@ function Diagnostico() {
             <Clock className="h-4 w-4" /> Em 10s
           </button>
           <button
-            onClick={() => void runScheduledTest(30)}
+            onClick={() => void runScheduledTest(60)}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
           >
-            <Clock className="h-4 w-4" /> Em 30s
+            <Clock className="h-4 w-4" /> Em 1 min
           </button>
         </div>
       </div>
