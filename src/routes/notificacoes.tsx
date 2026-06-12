@@ -158,6 +158,44 @@ function Diagnostico() {
         <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
       </Card>
 
+      {/* Detalhes nativos (APK Android) */}
+      {isNative && (
+        <Card className="mt-3 space-y-3">
+          <StatusLine
+            icon={<Smartphone className="h-4 w-4" />}
+            label="Plugin nativo disponível"
+            value={nativeStatus?.pluginAvailable ? "Sim" : "Não"}
+            color={nativeStatus?.pluginAvailable ? "var(--primary)" : "var(--danger)"}
+          />
+          <StatusLine
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="Permissão Android"
+            value={
+              nativeStatus?.permission === "granted"
+                ? "granted"
+                : nativeStatus?.permission === "denied"
+                  ? "denied"
+                  : nativeStatus?.permission === "default"
+                    ? "prompt"
+                    : "—"
+            }
+            color={
+              nativeStatus?.permission === "granted"
+                ? "var(--primary)"
+                : nativeStatus?.permission === "denied"
+                  ? "var(--danger)"
+                  : "var(--warning)"
+            }
+          />
+          <StatusLine
+            icon={<AlertTriangle className="h-4 w-4" />}
+            label="Último erro real"
+            value={nativeStatus?.lastError ?? "Nenhum"}
+            color={nativeStatus?.lastError ? "var(--danger)" : undefined}
+          />
+        </Card>
+      )}
+
       {/* Aviso de ambiente — não é erro crítico */}
       {!isNative && (
         <Card className="mt-3 flex items-start gap-2" style={{ borderColor: "color-mix(in oklab, var(--cat-estudos) 40%, transparent)" }}>
