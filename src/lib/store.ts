@@ -348,6 +348,8 @@ interface State {
   setMinStudyMinutes: (minutes: number) => void;
   setRequireWorkout: (on: boolean) => void;
   recomputeCofrinho: () => void;
+  checkTodayReward: () => CofrinhoCheckResult;
+  simulateToday: () => CofrinhoSimResult;
   addRewardGoal: (name: string, target: number) => void;
   deleteRewardGoal: (id: string) => void;
   redeemReward: (name: string, amount: number) => void;
