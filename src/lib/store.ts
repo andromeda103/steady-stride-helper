@@ -357,33 +357,45 @@ interface CofInputs {
   workoutLog: string[];
 }
 
-// Recompute today's cofrinho earning based on ALL required criteria
-// (hábitos + tarefas + estudo mínimo + treino). Keeps ledger/events in sync.
+// Grant today's cofrinho reward IF (and only if) all required criteria are met
+// AND the reward was not already granted today. Granting is "locked" per day:
+// once granted, unchecking tasks/habits later does NOT remove the money.
+// This guarantees the reward is never added twice in the same day.
 function applyCofrinhoToday(input: CofInputs): Cofrinho {
   const { cofrinho, habits, tasks, studyLog, workoutLog } = input;
   const today = todayKey();
+  const granted = (cofrinho.rewardGrantedDates ?? []).includes(today);
+  // Already paid today → nothing to do (locked, no duplicate, no removal).
+  if (granted) return cofrinho;
+
   const status = computeDayStatus(cofrinho, habits, tasks, studyLog, workoutLog);
-  const wasEarned = cofrinho.earnedByDay[today] || 0;
-  const shouldEarn = status.perfect ? cofrinho.dailyAmount : 0;
-  if (wasEarned === shouldEarn) return cofrinho;
+  // Not a perfect day yet (or no rules configured) → keep waiting.
+  if (!status.perfect) return cofrinho;
 
-  const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
-  const perfectDays = status.perfect
-    ? Array.from(new Set([...cofrinho.perfectDays, today]))
-    : cofrinho.perfectDays.filter((d) => d !== today);
-
-  // ledger: remove lançamento de "Dia perfeito" de hoje e recria se ganhou
-  let ledger = cofrinho.ledger.filter((e) => !(e.date === today && e.amount > 0 && e.reason === "Dia perfeito"));
-  let events = cofrinho.events;
-  if (shouldEarn > 0) {
-    ledger = [{ id: uid(), date: today, at: Date.now(), amount: shouldEarn, reason: "Dia perfeito" }, ...ledger];
-    events = [cofEvent("earned", `Recompensa de ${brl(shouldEarn)} liberada (dia perfeito)`), ...events].slice(0, 120);
-  } else if (wasEarned > 0) {
-    events = [cofEvent("lost", `Recompensa de ${brl(wasEarned)} perdida (dia incompleto)`), ...events].slice(0, 120);
-  }
-
+  const amount = cofrinho.dailyAmount;
+  const earnedByDay = { ...cofrinho.earnedByDay, [today]: amount };
+  const perfectDays = Array.from(new Set([...cofrinho.perfectDays, today]));
+  const rewardGrantedDates = Array.from(new Set([...(cofrinho.rewardGrantedDates ?? []), today]));
+  const ledger =
+    amount > 0
+      ? [{ id: uid(), date: today, at: Date.now(), amount, reason: "Dia perfeito" }, ...cofrinho.ledger]
+      : cofrinho.ledger;
+  const events =
+    amount > 0
+      ? [cofEvent("earned", `Recompensa de ${brl(amount)} liberada (dia perfeito)`), ...cofrinho.events].slice(0, 120)
+      : cofrinho.events;
   const balance = ledger.reduce((a, e) => a + e.amount, 0);
-  return { ...cofrinho, balance, earnedByDay, perfectDays, ledger, events };
+
+  return {
+    ...cofrinho,
+    balance,
+    earnedByDay,
+    perfectDays,
+    rewardGrantedDates,
+    lastRewardDate: amount > 0 ? today : cofrinho.lastRewardDate,
+    ledger,
+    events,
+  };
 }
 
 // Recompute helper that pulls all relevant slices from the current state,
