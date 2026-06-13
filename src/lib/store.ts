@@ -955,6 +955,34 @@ export const useStore = create<State>()(
             events: Array.isArray(c.events) ? c.events : [],
           };
         }
+        if (version < 7) {
+          // Cofrinho v7: controle de duplicidade da recompensa por data.
+          const c = (state.cofrinho ?? DEFAULT_COFRINHO) as Record<string, unknown>;
+          // Reconstrói rewardGrantedDates a partir dos dias que já tiveram ganho.
+          const earnedByDay = (c.earnedByDay ?? {}) as Record<string, number>;
+          const grantedFromHistory = Object.entries(earnedByDay)
+            .filter(([, amt]) => (amt as number) > 0)
+            .map(([date]) => date);
+          const granted = Array.isArray(c.rewardGrantedDates)
+            ? (c.rewardGrantedDates as string[])
+            : grantedFromHistory;
+          const lastReward =
+            typeof c.lastRewardDate === "string"
+              ? c.lastRewardDate
+              : granted.length > 0
+                ? [...granted].sort().slice(-1)[0]
+                : null;
+          state.cofrinho = {
+            ...DEFAULT_COFRINHO,
+            ...c,
+            rewardGrantedDates: granted,
+            lastRewardDate: lastReward,
+            goals: Array.isArray(c.goals) ? c.goals : [],
+            history: Array.isArray(c.history) ? c.history : [],
+            ledger: Array.isArray(c.ledger) ? c.ledger : [],
+            events: Array.isArray(c.events) ? c.events : [],
+          };
+        }
 
         return state as unknown as State;
       },
