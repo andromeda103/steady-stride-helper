@@ -66,12 +66,35 @@ function Cofrinho() {
     toast.success("✅ Recompensa salva com sucesso", { description: `${brl(v)} por dia perfeito` });
   }
 
-  // ------- Área de teste (não altera dados reais) -------
+  // ------- Área de teste (NÃO altera dados reais) -------
   const [testResult, setTestResult] = useState<string | null>(null);
   function runTest() {
-    const v = parseFloat(amountInput.replace(",", ".")) || cofrinho.dailyAmount;
-    setTestResult(`Simulação de dia perfeito: +${brl(v)} seriam adicionados ao cofrinho.`);
-    toast.success(`${brl(v)} adicionados (simulação)`, { description: "Nenhum dado real foi alterado." });
+    const sim = simulateToday();
+    if (sim.wouldGrant) {
+      const msg = `Simulação: com as regras atuais, seriam adicionados ${brl(sim.amount)}.`;
+      setTestResult(msg);
+      toast.success("Simulação concluída", { description: "Nenhum dado real foi alterado." });
+    } else {
+      const falta = sim.missing.length ? sim.missing.join(", ") : "configure ao menos uma exigência";
+      const msg = `Simulação: recompensa NÃO liberada. Falta: ${falta}.`;
+      setTestResult(msg);
+      toast("Recompensa pendente (simulação)", { description: "Nenhum dado real foi alterado." });
+    }
+  }
+
+  // ------- Verificar / conceder recompensa de hoje -------
+  function verifyToday() {
+    const r = checkTodayReward();
+    if (r.outcome === "granted") {
+      toast.success(`+${brl(r.amount)} adicionados! 🎉`, { description: "Recompensa do dia perfeito concedida." });
+    } else if (r.outcome === "already") {
+      toast("Recompensa de hoje já foi adicionada", { description: "Ela só pode ser concedida uma vez por dia." });
+    } else if (r.outcome === "no_rules") {
+      toast("Nenhuma exigência configurada", { description: "Marque hábitos/tarefas obrigatórios abaixo." });
+    } else {
+      const falta = r.missing.length ? r.missing.join(", ") : "requisitos do dia";
+      toast.error("Recompensa pendente", { description: `Falta: ${falta}` });
+    }
   }
 
   // ------- Metas / compras -------
@@ -96,6 +119,27 @@ function Cofrinho() {
     redeemReward(name, amount);
     toast.success("Recompensa resgatada! 🎁", { description: `${name} · ${brl(amount)}` });
   }
+
+  // ------- Resgate manual (compra avulsa) -------
+  const [redeemName, setRedeemName] = useState("");
+  const [redeemAmount, setRedeemAmount] = useState("");
+  function runRedeem() {
+    const a = parseFloat(redeemAmount.replace(",", "."));
+    if (!redeemName.trim() || !a || a <= 0) {
+      toast("Preencha nome e valor válidos");
+      return;
+    }
+    if (a > cofrinho.balance) {
+      toast.error("Saldo insuficiente", { description: `Saldo atual: ${brl(cofrinho.balance)}` });
+      return;
+    }
+    redeemReward(redeemName.trim(), a);
+    toast.success("Resgate registrado! 🎁", { description: `${redeemName.trim()} · −${brl(a)}` });
+    setRedeemName("");
+    setRedeemAmount("");
+  }
+
+  const grantedToday = (cofrinho.rewardGrantedDates ?? []).includes(todayKey());
 
   // visual: quantidade de moedas proporcional ao saldo
   const coinCount = Math.min(40, Math.max(0, Math.floor(cofrinho.balance / 10)));
