@@ -34,6 +34,8 @@ function Cofrinho() {
   const setMinStudyMinutes = useStore((s) => s.setMinStudyMinutes);
   const setRequireWorkout = useStore((s) => s.setRequireWorkout);
   const recomputeCofrinho = useStore((s) => s.recomputeCofrinho);
+  const checkTodayReward = useStore((s) => s.checkTodayReward);
+  const simulateToday = useStore((s) => s.simulateToday);
   const addRewardGoal = useStore((s) => s.addRewardGoal);
   const deleteRewardGoal = useStore((s) => s.deleteRewardGoal);
   const redeemReward = useStore((s) => s.redeemReward);
