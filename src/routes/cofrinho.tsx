@@ -227,6 +227,42 @@ function Cofrinho() {
             {status.perfect ? `LIBERADA · +${brl(cofrinho.dailyAmount)}` : "PENDENTE"}
           </span>
         </div>
+
+        {/* Verificar / conceder recompensa de hoje */}
+        <button
+          onClick={verifyToday}
+          className="no-tap mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold"
+          style={
+            grantedToday
+              ? { background: "var(--secondary)", color: "var(--muted-foreground)" }
+              : { background: "var(--primary)", color: "var(--primary-foreground)" }
+          }
+        >
+          <CalendarCheck className="h-4 w-4" />
+          {grantedToday ? "Recompensa de hoje já adicionada" : "Verificar recompensa de hoje"}
+        </button>
+      </Card>
+
+      {/* Diagnóstico do cofrinho */}
+      <SectionLabel>Diagnóstico</SectionLabel>
+      <Card className="space-y-2.5">
+        <DiagKV label="Valor diário configurado" value={brl(cofrinho.dailyAmount)} />
+        <DiagKV label="Saldo atual" value={brl(cofrinho.balance)} />
+        <DiagKV
+          label="Recompensa de hoje liberada"
+          value={status.perfect ? "Sim" : "Não"}
+          color={status.perfect ? "var(--primary)" : "var(--warning)"}
+        />
+        <DiagKV
+          label="Já concedida hoje"
+          value={grantedToday ? "Sim" : "Não"}
+          color={grantedToday ? "var(--primary)" : undefined}
+        />
+        <DiagKV
+          label="Última recompensa concedida"
+          value={cofrinho.lastRewardDate ? fmtDate(cofrinho.lastRewardDate) : "—"}
+        />
+        <DiagKV label="Exigências configuradas" value={status.active ? "Sim" : "Não (nenhuma)"} color={status.active ? undefined : "var(--warning)"} />
       </Card>
 
       {/* Configuração de recompensa */}
