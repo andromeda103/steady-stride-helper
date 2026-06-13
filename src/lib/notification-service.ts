@@ -8,9 +8,15 @@
 //   ANDROID -> Capacitor Local Notifications (native AlarmManager)
 //
 // The mode is selected automatically via isNativePlatform().
-// On web today everything routes to the existing, battle-tested web engine in
-// `notify.ts`. When the app is later wrapped with Capacitor, the same calls are
-// transparently served by native local notifications — no feature code changes.
+//
+// IMPORTANT (Android/APK):
+//   - The Capacitor plugin is loaded with a DYNAMIC import and ONLY when
+//     running natively (Capacitor.isNativePlatform() === true). This keeps the
+//     web/SSR bundle from ever touching native-only code.
+//   - A notification channel ("levelup_reminders") is created BEFORE any
+//     schedule() call (required on Android 8+).
+//   - Listeners are registered exactly ONCE (in init()).
+//   - Every error is captured with stage + message + stack + timestamp.
 // ============================================================================
 
 import { isNativePlatform } from "./platform";
@@ -25,6 +31,8 @@ import {
 import { useStore, type ScheduledNotif } from "./store";
 
 export type NotificationMode = "web" | "android";
+
+const CHANNEL_ID = "levelup_reminders";
 
 export interface NotifyOptions {
   tag?: string;
@@ -53,6 +61,16 @@ function log(
   }
 }
 
+/** Capture an error with full context (stage + message + stack + time). */
+function captureError(stage: string, e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const stack = e instanceof Error && e.stack ? `\n${e.stack.split("\n").slice(0, 3).join("\n")}` : "";
+  const detail = `[${stage}] ${msg}${stack}`;
+  lastNativeError = detail;
+  log("error", stage, detail);
+  return detail;
+}
+
 /** Current delivery mode based on the runtime platform. */
 export function getNotificationMode(): NotificationMode {
   return isNativePlatform() ? "android" : "web";
@@ -60,52 +78,62 @@ export function getNotificationMode(): NotificationMode {
 
 // ----------------------------------------------------------------------------
 // Capacitor (ANDROID) adapter.
-//
-// `@capacitor/local-notifications` is a real dependency now, so we import it
-// with a STATIC specifier. Vite code-splits it into its own chunk that is
-// bundled into BOTH builds — but it is only ever loaded at runtime inside the
-// native Android shell (getNotificationMode() === "android"). On web the chunk
-// is never executed, so the browser bundle is unaffected.
 // ----------------------------------------------------------------------------
 
+type PermStatus = { display: string };
+
 type LocalNotificationsPlugin = {
-  requestPermissions: () => Promise<{ display: string }>;
-  checkPermissions: () => Promise<{ display: string }>;
+  requestPermissions: () => Promise<PermStatus>;
+  checkPermissions: () => Promise<PermStatus>;
+  createChannel: (opts: {
+    id: string;
+    name: string;
+    description?: string;
+    importance?: number;
+    visibility?: number;
+    sound?: string;
+    vibration?: boolean;
+    lights?: boolean;
+  }) => Promise<void>;
   schedule: (opts: {
     notifications: Array<{
       id: number;
       title: string;
       body: string;
-      schedule?: { at: Date };
+      channelId?: string;
+      schedule?: { at: Date; allowWhileIdle?: boolean };
     }>;
   }) => Promise<void>;
   cancel: (opts: { notifications: Array<{ id: number }> }) => Promise<void>;
+  getPending?: () => Promise<{ notifications: Array<{ id: number }> }>;
+  addListener: (event: string, cb: (data: unknown) => void) => Promise<unknown> | unknown;
 };
 
 let nativePluginPromise: Promise<LocalNotificationsPlugin | null> | null = null;
 let lastNativeError: string | null = null;
+let channelCreated = false;
+let listenersRegistered = false;
+let lastCheckRaw = "";
+let lastRequestRaw = "";
 
 async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
+  if (getNotificationMode() !== "android") return null;
   if (!nativePluginPromise) {
     nativePluginPromise = (async () => {
       try {
-        // Static specifier → Vite bundles the plugin into a lazy chunk.
+        // Dynamic import — only ever reached inside the native Android shell.
         const mod = await import("@capacitor/local-notifications");
         const plugin = (mod.LocalNotifications ?? null) as unknown as LocalNotificationsPlugin | null;
         if (!plugin) {
           lastNativeError = "Módulo carregado mas LocalNotifications ausente.";
+          log("error", "Capacitor", lastNativeError);
         } else {
           lastNativeError = null;
         }
         return plugin;
       } catch (e) {
-        lastNativeError = String(e);
-        // Not a critical error: native plugin only resolves inside the APK.
-        log(
-          "service_worker",
-          "Capacitor",
-          `Plugin nativo indisponível (esperado fora do APK): ${String(e)}`,
-        );
+        captureError("import-plugin", e);
+        nativePluginPromise = null; // allow retry later
         return null;
       }
     })();
@@ -113,30 +141,128 @@ async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
   return nativePluginPromise;
 }
 
+/** Create the Android notification channel once (idempotent). */
+async function ensureChannel(plugin: LocalNotificationsPlugin): Promise<boolean> {
+  if (channelCreated) return true;
+  try {
+    await plugin.createChannel({
+      id: CHANNEL_ID,
+      name: "LevelUp Lembretes",
+      description: "Lembretes de rotina, estudo, treino e hábitos",
+      importance: 5, // máxima (heads-up)
+      visibility: 1, // público
+      sound: "default",
+      vibration: true,
+      lights: true,
+    });
+    channelCreated = true;
+    log("service_worker", "Canal Android", `Canal "${CHANNEL_ID}" criado/garantido`);
+    return true;
+  } catch (e) {
+    captureError("create-channel", e);
+    return false;
+  }
+}
+
+/** Register native listeners exactly once. */
+async function registerListeners(plugin: LocalNotificationsPlugin) {
+  if (listenersRegistered) return;
+  listenersRegistered = true;
+  try {
+    await plugin.addListener("localNotificationReceived", (data: unknown) => {
+      const n = data as { title?: string } | undefined;
+      log("received", n?.title ?? "Notificação", "Recebida (nativa)");
+    });
+    await plugin.addListener("localNotificationActionPerformed", (data: unknown) => {
+      const n = data as { notification?: { title?: string } } | undefined;
+      log("received", n?.notification?.title ?? "Notificação", "Toque/ação na notificação");
+    });
+    log("service_worker", "Listeners", "Listeners nativos registrados");
+  } catch (e) {
+    captureError("add-listener", e);
+  }
+}
+
+/** Ensure permission is granted: check → request if needed → check again. */
+async function ensureNativePermission(
+  plugin: LocalNotificationsPlugin,
+): Promise<"granted" | "denied" | "default"> {
+  try {
+    let res = await plugin.checkPermissions();
+    lastCheckRaw = JSON.stringify(res);
+    log("permission", "checkPermissions", lastCheckRaw);
+    if (res.display !== "granted") {
+      const req = await plugin.requestPermissions();
+      lastRequestRaw = JSON.stringify(req);
+      log("permission", "requestPermissions", lastRequestRaw);
+      res = await plugin.checkPermissions();
+      lastCheckRaw = JSON.stringify(res);
+      log("permission", "checkPermissions (re)", lastCheckRaw);
+    }
+    return res.display === "granted" ? "granted" : res.display === "denied" ? "denied" : "default";
+  } catch (e) {
+    captureError("ensure-permission", e);
+    return "default";
+  }
+}
+
 /** Diagnostic snapshot of the native notification adapter. */
 export async function getNativePluginStatus(): Promise<{
   mode: NotificationMode;
   pluginAvailable: boolean;
   permission: "granted" | "denied" | "default" | "unsupported";
+  channelCreated: boolean;
+  listenersRegistered: boolean;
+  pendingCount: number;
+  checkRaw: string;
+  requestRaw: string;
   lastError: string | null;
 }> {
   const mode = getNotificationMode();
   if (mode !== "android") {
-    return { mode, pluginAvailable: false, permission: "unsupported", lastError: null };
+    return {
+      mode,
+      pluginAvailable: false,
+      permission: "unsupported",
+      channelCreated: false,
+      listenersRegistered: false,
+      pendingCount: 0,
+      checkRaw: "",
+      requestRaw: "",
+      lastError: null,
+    };
   }
   const plugin = await loadNativePlugin();
   let permission: "granted" | "denied" | "default" | "unsupported" = "unsupported";
+  let pendingCount = 0;
   if (plugin) {
     try {
       const res = await plugin.checkPermissions();
+      lastCheckRaw = JSON.stringify(res);
       permission =
         res.display === "granted" ? "granted" : res.display === "denied" ? "denied" : "default";
     } catch (e) {
-      lastNativeError = String(e);
+      captureError("status-check", e);
       permission = "default";
     }
+    try {
+      const pend = (await plugin.getPending?.()) ?? { notifications: [] };
+      pendingCount = pend.notifications.length;
+    } catch {
+      /* getPending optional */
+    }
   }
-  return { mode, pluginAvailable: !!plugin, permission, lastError: lastNativeError };
+  return {
+    mode,
+    pluginAvailable: !!plugin,
+    permission,
+    channelCreated,
+    listenersRegistered,
+    pendingCount,
+    checkRaw: lastCheckRaw,
+    requestRaw: lastRequestRaw,
+    lastError: lastNativeError,
+  };
 }
 
 // Capacitor notification ids are 32-bit ints; keep a string<->int map for cancel().
@@ -158,26 +284,24 @@ export const notificationService = {
   async init(): Promise<void> {
     if (getNotificationMode() === "android") {
       const plugin = await loadNativePlugin();
-      if (plugin) log("service_worker", "NotificationService", "Modo Android (Capacitor) ativo");
+      if (plugin) {
+        await ensureChannel(plugin);
+        await registerListeners(plugin);
+        log("service_worker", "NotificationService", "Modo Android (Capacitor) ativo");
+      }
       return;
     }
     await webInit();
   },
 
-  /** Request OS permission for notifications. */
+  /** Request OS permission for notifications (full check → request → check). */
   async requestPermission(): Promise<"granted" | "denied" | "default" | "unsupported"> {
     if (getNotificationMode() === "android") {
       const plugin = await loadNativePlugin();
       if (!plugin) return "unsupported";
-      try {
-        const res = await plugin.requestPermissions();
-        const granted = res.display === "granted";
-        log("permission", "Permissão", `Android: ${res.display}`);
-        return granted ? "granted" : "denied";
-      } catch (e) {
-        log("error", "Permissão", `Android falhou: ${String(e)}`);
-        return "denied";
-      }
+      const r = await ensureNativePermission(plugin);
+      if (r === "granted") await ensureChannel(plugin);
+      return r;
     }
     const r = await webRequestPermission();
     return r === "unsupported" ? "unsupported" : r;
@@ -190,8 +314,10 @@ export const notificationService = {
       if (!plugin) return "unsupported";
       try {
         const res = await plugin.checkPermissions();
+        lastCheckRaw = JSON.stringify(res);
         return res.display === "granted" ? "granted" : res.display === "denied" ? "denied" : "default";
-      } catch {
+      } catch (e) {
+        captureError("current-permission", e);
         return "default";
       }
     }
@@ -199,19 +325,34 @@ export const notificationService = {
     return r === "unsupported" ? "unsupported" : r;
   },
 
-  /** Fire an immediate notification. */
+  /** Fire a notification (native: ~2s later via schedule; web: immediate). */
   async notify(title: string, body: string, options: NotifyOptions = {}): Promise<NotifyResult> {
     if (getNotificationMode() === "android") {
       const plugin = await loadNativePlugin();
-      if (!plugin) return { ok: false, mode: "android", message: "Plugin indisponível" };
+      if (!plugin) return { ok: false, mode: "android", message: "Plugin nativo indisponível" };
+      const perm = await ensureNativePermission(plugin);
+      if (perm !== "granted") {
+        return { ok: false, mode: "android", message: `Permissão: ${perm}` };
+      }
+      await ensureChannel(plugin);
       try {
         const id = toNativeId(options.tag ?? nUid());
-        log("sent", title, "Solicitada via Capacitor");
-        await plugin.schedule({ notifications: [{ id, title, body }] });
-        log("received", title, "Notificação nativa criada");
-        return { ok: true, mode: "android", message: "Notificação nativa criada" };
+        log("sent", title, "Agendada via Capacitor (imediata ~2s)");
+        await plugin.schedule({
+          notifications: [
+            {
+              id,
+              title,
+              body,
+              channelId: CHANNEL_ID,
+              schedule: { at: new Date(Date.now() + 2000), allowWhileIdle: true },
+            },
+          ],
+        });
+        return { ok: true, mode: "android", message: "Notificação nativa agendada (2s)" };
       } catch (e) {
-        return { ok: false, mode: "android", message: "Erro nativo", detail: String(e) };
+        const detail = captureError("notify-schedule", e);
+        return { ok: false, mode: "android", message: "Erro nativo ao agendar", detail };
       }
     }
     const r = await webFire(title, body, options);
@@ -221,18 +362,35 @@ export const notificationService = {
   /** Schedule a notification after `delayMs`. Returns an id usable with cancel(). */
   async schedule(title: string, body: string, delayMs: number): Promise<string> {
     if (getNotificationMode() === "android") {
-      const plugin = await loadNativePlugin();
       const id = nUid();
-      if (!plugin) return id;
+      const plugin = await loadNativePlugin();
+      if (!plugin) {
+        log("error", title, "Plugin nativo indisponível ao agendar");
+        return id;
+      }
+      const perm = await ensureNativePermission(plugin);
+      if (perm !== "granted") {
+        log("error", title, `Agendamento cancelado — permissão: ${perm}`);
+        return id;
+      }
+      await ensureChannel(plugin);
       try {
         const sc: ScheduledNotif = { id, fireAt: Date.now() + delayMs, title, body };
         useStore.getState().addScheduled(sc);
         await plugin.schedule({
-          notifications: [{ id: toNativeId(id), title, body, schedule: { at: new Date(sc.fireAt) } }],
+          notifications: [
+            {
+              id: toNativeId(id),
+              title,
+              body,
+              channelId: CHANNEL_ID,
+              schedule: { at: new Date(sc.fireAt), allowWhileIdle: true },
+            },
+          ],
         });
-        log("scheduled", title, `Android: ${Math.round(delayMs / 1000)}s`);
+        log("scheduled", title, `Android: dispara em ${Math.round(delayMs / 1000)}s`);
       } catch (e) {
-        log("error", title, `Falha ao agendar nativo: ${String(e)}`);
+        captureError("schedule", e);
       }
       return id;
     }
@@ -249,7 +407,7 @@ export const notificationService = {
           await plugin.cancel({ notifications: [{ id: toNativeId(id) }] });
           log("cancelled", "Agendamento", "Cancelado (Android)");
         } catch (e) {
-          log("error", "Agendamento", `Falha ao cancelar nativo: ${String(e)}`);
+          captureError("cancel", e);
         }
       }
       return;
