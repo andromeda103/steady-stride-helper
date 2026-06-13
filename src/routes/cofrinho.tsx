@@ -557,6 +557,15 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
   );
 }
 
+function DiagKV({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-bold" style={color ? { color } : undefined}>{value}</span>
+    </div>
+  );
+}
+
 function DiagRow({ icon, label, value, ok }: { icon: React.ReactNode; label: string; value: string; ok: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
