@@ -188,6 +188,33 @@ function Diagnostico() {
             }
           />
           <StatusLine
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="Canal Android criado"
+            value={nativeStatus?.channelCreated ? "Sim" : "Não"}
+            color={nativeStatus?.channelCreated ? "var(--primary)" : "var(--warning)"}
+          />
+          <StatusLine
+            icon={<Bot className="h-4 w-4" />}
+            label="Listeners registrados"
+            value={nativeStatus?.listenersRegistered ? "Sim" : "Não"}
+            color={nativeStatus?.listenersRegistered ? "var(--primary)" : "var(--warning)"}
+          />
+          <StatusLine
+            icon={<Clock className="h-4 w-4" />}
+            label="Pendentes (nativo)"
+            value={String(nativeStatus?.pendingCount ?? 0)}
+          />
+          <StatusLine
+            icon={<Info className="h-4 w-4" />}
+            label="checkPermissions()"
+            value={nativeStatus?.checkRaw || "—"}
+          />
+          <StatusLine
+            icon={<Info className="h-4 w-4" />}
+            label="requestPermissions()"
+            value={nativeStatus?.requestRaw || "—"}
+          />
+          <StatusLine
             icon={<AlertTriangle className="h-4 w-4" />}
             label="Último erro real"
             value={nativeStatus?.lastError ?? "Nenhum"}
