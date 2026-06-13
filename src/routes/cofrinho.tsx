@@ -467,6 +467,33 @@ function Cofrinho() {
         })}
       </div>
 
+      {/* Resgate manual (compra avulsa) */}
+      <SectionLabel>Resgatar recompensa</SectionLabel>
+      <Card className="space-y-2">
+        <div className="flex gap-2">
+          <input
+            value={redeemName}
+            onChange={(e) => setRedeemName(e.target.value)}
+            placeholder="Ex: Carta Pokémon"
+            className="min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          />
+          <input
+            value={redeemAmount}
+            onChange={(e) => setRedeemAmount(e.target.value)}
+            inputMode="decimal"
+            placeholder="R$"
+            className="w-20 shrink-0 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        <button
+          onClick={runRedeem}
+          className="no-tap flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+        >
+          <Gift className="h-4 w-4" /> Resgatar do saldo
+        </button>
+        <p className="text-xs text-muted-foreground">Saldo disponível: {brl(cofrinho.balance)}</p>
+      </Card>
+
       {/* Histórico financeiro */}
       <SectionLabel>Histórico financeiro</SectionLabel>
       <Card>
