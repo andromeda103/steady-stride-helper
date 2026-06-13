@@ -189,3 +189,65 @@ npm run cap:open      # abre o Android Studio
 
 Pronto — APK gerado a partir do mesmo código do app web. 🎉
 
+
+---
+
+## 8. Correções de notificações nativas + Cofrinho (atualização)
+
+### Notificações nativas (APK)
+- O plugin `@capacitor/local-notifications` é carregado por **import dinâmico**
+  e **só** no APK (`Capacitor.isNativePlatform()`), nunca na web/SSR.
+- Antes de qualquer `schedule()` o app cria o canal **`levelup_reminders`**
+  (importance 5, visibility 1, som + vibração).
+- Listeners (`localNotificationReceived` / `localNotificationActionPerformed`)
+  são registrados **uma única vez** em `notificationService.init()`.
+- Toda falha é capturada com **etapa + mensagem + stack + horário** e aparece
+  na tela de Diagnóstico (Você → Diagnóstico de notificações).
+
+#### AndroidManifest.xml (obrigatório)
+Em `android/app/src/main/AndroidManifest.xml`, antes de `<application>`:
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+```
+
+#### Ícone `ic_stat_icon`
+O `capacitor.config.ts` **não** referencia mais um ícone inexistente — usa o
+ícone padrão do app. Para um ícone de status branco personalizado, crie
+`android/app/src/main/res/drawable/ic_stat_icon.png` e adicione de volta
+`smallIcon: "ic_stat_icon"` em `capacitor.config.ts`.
+
+### Comandos para gerar/testar o APK (Windows PowerShell)
+```powershell
+npm install
+Remove-Item -Recurse -Force .\dist -ErrorAction SilentlyContinue
+npm run build:android
+npx cap sync android
+cd android
+$env:JAVA_HOME="D:\android\jbr"
+$env:Path="D:\android\jbr\bin;$env:Path"
+$sdk = "$env:LOCALAPPDATA\Android\Sdk"
+$sdkProp = $sdk -replace '\\','/'
+Set-Content -Path .\local.properties -Value "sdk.dir=$sdkProp"
+.\gradlew.bat assembleDebug
+```
+
+### Como testar as notificações no APK
+1. Abra **Você → Diagnóstico de notificações**.
+2. Toque em **Permitir notificações** → Android deve pedir a permissão.
+3. Confirme que **Plugin nativo disponível = Sim** e **Canal Android criado = Sim**.
+4. **Testar agora (nativo)** → notificação aparece em ~2s.
+5. **Em 10s / Em 1 min** → notificações agendadas disparam no tempo.
+6. "Última enviada", "Última recebida", "Pendentes" e o log devem atualizar.
+
+### Como testar o Cofrinho
+1. Defina o **Valor por dia perfeito** e toque em **Salvar recompensa**.
+2. Abra **Hábitos/Tarefas obrigatórios** e marque o que conta como dia perfeito.
+3. Conclua os requisitos do dia → o status mostra **Recompensa LIBERADA**.
+4. Toque em **Verificar recompensa de hoje** → saldo sobe e o histórico
+   registra `+ Dia perfeito`.
+5. Tocar de novo no mesmo dia mostra **"Recompensa de hoje já adicionada"**
+   (controle por `rewardGrantedDates`, sem duplicar).
+6. **Testar sistema** simula o cálculo **sem** alterar o saldo real.
+7. **Resgatar recompensa** desconta do saldo e registra a saída no histórico.
