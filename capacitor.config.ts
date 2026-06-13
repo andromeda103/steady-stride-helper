@@ -16,7 +16,10 @@ const config: CapacitorConfig = {
   },
   plugins: {
     LocalNotifications: {
-      smallIcon: "ic_stat_icon",
+      // Sem smallIcon: usa o ícone padrão do app (evita referência inexistente).
+      // Para um ícone branco de status, crie res/drawable/ic_stat_icon.png e
+      // descomente a linha abaixo:
+      // smallIcon: "ic_stat_icon",
       iconColor: "#3DDC84",
     },
     SplashScreen: {
