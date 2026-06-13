@@ -209,6 +209,8 @@ export interface Cofrinho {
   balance: number; // saldo acumulado (ganho - resgatado)
   earnedByDay: Record<string, number>; // date -> R$ ganho
   perfectDays: string[]; // date keys de dias perfeitos
+  rewardGrantedDates: string[]; // dias em que a recompensa já foi concedida (evita duplicidade)
+  lastRewardDate: string | null; // último dia em que a recompensa foi concedida
   goals: RewardGoal[];
   history: RewardRedeem[]; // resgates (compat)
   ledger: LedgerEntry[]; // histórico financeiro unificado
@@ -224,6 +226,8 @@ export const DEFAULT_COFRINHO: Cofrinho = {
   balance: 0,
   earnedByDay: {},
   perfectDays: [],
+  rewardGrantedDates: [],
+  lastRewardDate: null,
   goals: [],
   history: [],
   ledger: [],
@@ -235,6 +239,21 @@ export const DEFAULT_SETTINGS: Settings = {
   secondaryColor: "oklch(0.7 0.16 250)",
   darkMode: "default",
 };
+
+/** Resultado de uma checagem/concessão da recompensa diária. */
+export interface CofrinhoCheckResult {
+  outcome: "granted" | "already" | "pending" | "no_rules";
+  amount: number;
+  missing: string[]; // requisitos pendentes (quando outcome === "pending")
+}
+
+/** Resultado de uma simulação (não altera dados reais). */
+export interface CofrinhoSimResult {
+  wouldGrant: boolean;
+  amount: number;
+  missing: string[];
+}
+
 
 interface State {
   tasks: Task[];
@@ -329,6 +348,8 @@ interface State {
   setMinStudyMinutes: (minutes: number) => void;
   setRequireWorkout: (on: boolean) => void;
   recomputeCofrinho: () => void;
+  checkTodayReward: () => CofrinhoCheckResult;
+  simulateToday: () => CofrinhoSimResult;
   addRewardGoal: (name: string, target: number) => void;
   deleteRewardGoal: (id: string) => void;
   redeemReward: (name: string, amount: number) => void;
@@ -345,6 +366,19 @@ function cofEvent(kind: CofrinhoEventKind, detail: string): CofrinhoEvent {
   return { id: uid(), at: Date.now(), kind, detail };
 }
 
+/** Human-readable list of which required criteria are still pending today. */
+function missingRequirements(status: ReturnType<typeof computeDayStatus>): string[] {
+  const missing: string[] = [];
+  if (status.habits.active && !status.habits.ok)
+    missing.push(`Hábitos (${status.habits.done}/${status.habits.total})`);
+  if (status.tasks.active && !status.tasks.ok)
+    missing.push(`Tarefas (${status.tasks.done}/${status.tasks.total})`);
+  if (status.study.active && !status.study.ok)
+    missing.push(`Estudo (${status.study.done}/${status.study.total} min)`);
+  if (status.workout.active && !status.workout.ok) missing.push("Treino do dia");
+  return missing;
+}
+
 interface CofInputs {
   cofrinho: Cofrinho;
   habits: Habit[];
@@ -353,33 +387,45 @@ interface CofInputs {
   workoutLog: string[];
 }
 
-// Recompute today's cofrinho earning based on ALL required criteria
-// (hábitos + tarefas + estudo mínimo + treino). Keeps ledger/events in sync.
+// Grant today's cofrinho reward IF (and only if) all required criteria are met
+// AND the reward was not already granted today. Granting is "locked" per day:
+// once granted, unchecking tasks/habits later does NOT remove the money.
+// This guarantees the reward is never added twice in the same day.
 function applyCofrinhoToday(input: CofInputs): Cofrinho {
   const { cofrinho, habits, tasks, studyLog, workoutLog } = input;
   const today = todayKey();
+  const granted = (cofrinho.rewardGrantedDates ?? []).includes(today);
+  // Already paid today → nothing to do (locked, no duplicate, no removal).
+  if (granted) return cofrinho;
+
   const status = computeDayStatus(cofrinho, habits, tasks, studyLog, workoutLog);
-  const wasEarned = cofrinho.earnedByDay[today] || 0;
-  const shouldEarn = status.perfect ? cofrinho.dailyAmount : 0;
-  if (wasEarned === shouldEarn) return cofrinho;
+  // Not a perfect day yet (or no rules configured) → keep waiting.
+  if (!status.perfect) return cofrinho;
 
-  const earnedByDay = { ...cofrinho.earnedByDay, [today]: shouldEarn };
-  const perfectDays = status.perfect
-    ? Array.from(new Set([...cofrinho.perfectDays, today]))
-    : cofrinho.perfectDays.filter((d) => d !== today);
-
-  // ledger: remove lançamento de "Dia perfeito" de hoje e recria se ganhou
-  let ledger = cofrinho.ledger.filter((e) => !(e.date === today && e.amount > 0 && e.reason === "Dia perfeito"));
-  let events = cofrinho.events;
-  if (shouldEarn > 0) {
-    ledger = [{ id: uid(), date: today, at: Date.now(), amount: shouldEarn, reason: "Dia perfeito" }, ...ledger];
-    events = [cofEvent("earned", `Recompensa de ${brl(shouldEarn)} liberada (dia perfeito)`), ...events].slice(0, 120);
-  } else if (wasEarned > 0) {
-    events = [cofEvent("lost", `Recompensa de ${brl(wasEarned)} perdida (dia incompleto)`), ...events].slice(0, 120);
-  }
-
+  const amount = cofrinho.dailyAmount;
+  const earnedByDay = { ...cofrinho.earnedByDay, [today]: amount };
+  const perfectDays = Array.from(new Set([...cofrinho.perfectDays, today]));
+  const rewardGrantedDates = Array.from(new Set([...(cofrinho.rewardGrantedDates ?? []), today]));
+  const ledger =
+    amount > 0
+      ? [{ id: uid(), date: today, at: Date.now(), amount, reason: "Dia perfeito" }, ...cofrinho.ledger]
+      : cofrinho.ledger;
+  const events =
+    amount > 0
+      ? [cofEvent("earned", `Recompensa de ${brl(amount)} liberada (dia perfeito)`), ...cofrinho.events].slice(0, 120)
+      : cofrinho.events;
   const balance = ledger.reduce((a, e) => a + e.amount, 0);
-  return { ...cofrinho, balance, earnedByDay, perfectDays, ledger, events };
+
+  return {
+    ...cofrinho,
+    balance,
+    earnedByDay,
+    perfectDays,
+    rewardGrantedDates,
+    lastRewardDate: amount > 0 ? today : cofrinho.lastRewardDate,
+    ledger,
+    events,
+  };
 }
 
 // Recompute helper that pulls all relevant slices from the current state,
@@ -750,6 +796,34 @@ export const useStore = create<State>()(
 
       recomputeCofrinho: () => set((s) => ({ cofrinho: recompCof(s) })),
 
+      checkTodayReward: () => {
+        const s = get();
+        const today = todayKey();
+        const status = computeDayStatus(s.cofrinho, s.habits, s.tasks, s.studyLog, s.workoutLog);
+        const missing = missingRequirements(status);
+        if ((s.cofrinho.rewardGrantedDates ?? []).includes(today)) {
+          return { outcome: "already", amount: s.cofrinho.earnedByDay[today] ?? 0, missing: [] };
+        }
+        if (!status.active) {
+          return { outcome: "no_rules", amount: 0, missing: [] };
+        }
+        if (!status.perfect) {
+          return { outcome: "pending", amount: 0, missing };
+        }
+        // Liberada e ainda não concedida → concede agora.
+        const cofrinho = recompCof(s);
+        set({ cofrinho });
+        return { outcome: "granted", amount: cofrinho.earnedByDay[today] ?? s.cofrinho.dailyAmount, missing: [] };
+      },
+
+      simulateToday: () => {
+        const s = get();
+        const status = computeDayStatus(s.cofrinho, s.habits, s.tasks, s.studyLog, s.workoutLog);
+        const missing = missingRequirements(status);
+        return { wouldGrant: status.perfect, amount: status.perfect ? s.cofrinho.dailyAmount : 0, missing };
+      },
+
+
       logCofrinhoEvent: (kind, detail) =>
         set((s) => ({
           cofrinho: { ...s.cofrinho, events: [cofEvent(kind, detail), ...s.cofrinho.events].slice(0, 120) },
@@ -805,7 +879,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "levelup-store",
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => getStorage()),
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
@@ -878,6 +952,34 @@ export const useStore = create<State>()(
             minStudyMinutes: typeof c.minStudyMinutes === "number" ? c.minStudyMinutes : 0,
             requireWorkout: !!c.requireWorkout,
             ledger: Array.isArray(c.ledger) ? c.ledger : ledger,
+            events: Array.isArray(c.events) ? c.events : [],
+          };
+        }
+        if (version < 7) {
+          // Cofrinho v7: controle de duplicidade da recompensa por data.
+          const c = (state.cofrinho ?? DEFAULT_COFRINHO) as Record<string, unknown>;
+          // Reconstrói rewardGrantedDates a partir dos dias que já tiveram ganho.
+          const earnedByDay = (c.earnedByDay ?? {}) as Record<string, number>;
+          const grantedFromHistory = Object.entries(earnedByDay)
+            .filter(([, amt]) => (amt as number) > 0)
+            .map(([date]) => date);
+          const granted = Array.isArray(c.rewardGrantedDates)
+            ? (c.rewardGrantedDates as string[])
+            : grantedFromHistory;
+          const lastReward =
+            typeof c.lastRewardDate === "string"
+              ? c.lastRewardDate
+              : granted.length > 0
+                ? [...granted].sort().slice(-1)[0]
+                : null;
+          state.cofrinho = {
+            ...DEFAULT_COFRINHO,
+            ...c,
+            rewardGrantedDates: granted,
+            lastRewardDate: lastReward,
+            goals: Array.isArray(c.goals) ? c.goals : [],
+            history: Array.isArray(c.history) ? c.history : [],
+            ledger: Array.isArray(c.ledger) ? c.ledger : [],
             events: Array.isArray(c.events) ? c.events : [],
           };
         }

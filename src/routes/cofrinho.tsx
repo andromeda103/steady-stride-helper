@@ -34,6 +34,8 @@ function Cofrinho() {
   const setMinStudyMinutes = useStore((s) => s.setMinStudyMinutes);
   const setRequireWorkout = useStore((s) => s.setRequireWorkout);
   const recomputeCofrinho = useStore((s) => s.recomputeCofrinho);
+  const checkTodayReward = useStore((s) => s.checkTodayReward);
+  const simulateToday = useStore((s) => s.simulateToday);
   const addRewardGoal = useStore((s) => s.addRewardGoal);
   const deleteRewardGoal = useStore((s) => s.deleteRewardGoal);
   const redeemReward = useStore((s) => s.redeemReward);
@@ -64,12 +66,35 @@ function Cofrinho() {
     toast.success("✅ Recompensa salva com sucesso", { description: `${brl(v)} por dia perfeito` });
   }
 
-  // ------- Área de teste (não altera dados reais) -------
+  // ------- Área de teste (NÃO altera dados reais) -------
   const [testResult, setTestResult] = useState<string | null>(null);
   function runTest() {
-    const v = parseFloat(amountInput.replace(",", ".")) || cofrinho.dailyAmount;
-    setTestResult(`Simulação de dia perfeito: +${brl(v)} seriam adicionados ao cofrinho.`);
-    toast.success(`${brl(v)} adicionados (simulação)`, { description: "Nenhum dado real foi alterado." });
+    const sim = simulateToday();
+    if (sim.wouldGrant) {
+      const msg = `Simulação: com as regras atuais, seriam adicionados ${brl(sim.amount)}.`;
+      setTestResult(msg);
+      toast.success("Simulação concluída", { description: "Nenhum dado real foi alterado." });
+    } else {
+      const falta = sim.missing.length ? sim.missing.join(", ") : "configure ao menos uma exigência";
+      const msg = `Simulação: recompensa NÃO liberada. Falta: ${falta}.`;
+      setTestResult(msg);
+      toast("Recompensa pendente (simulação)", { description: "Nenhum dado real foi alterado." });
+    }
+  }
+
+  // ------- Verificar / conceder recompensa de hoje -------
+  function verifyToday() {
+    const r = checkTodayReward();
+    if (r.outcome === "granted") {
+      toast.success(`+${brl(r.amount)} adicionados! 🎉`, { description: "Recompensa do dia perfeito concedida." });
+    } else if (r.outcome === "already") {
+      toast("Recompensa de hoje já foi adicionada", { description: "Ela só pode ser concedida uma vez por dia." });
+    } else if (r.outcome === "no_rules") {
+      toast("Nenhuma exigência configurada", { description: "Marque hábitos/tarefas obrigatórios abaixo." });
+    } else {
+      const falta = r.missing.length ? r.missing.join(", ") : "requisitos do dia";
+      toast.error("Recompensa pendente", { description: `Falta: ${falta}` });
+    }
   }
 
   // ------- Metas / compras -------
@@ -94,6 +119,27 @@ function Cofrinho() {
     redeemReward(name, amount);
     toast.success("Recompensa resgatada! 🎁", { description: `${name} · ${brl(amount)}` });
   }
+
+  // ------- Resgate manual (compra avulsa) -------
+  const [redeemName, setRedeemName] = useState("");
+  const [redeemAmount, setRedeemAmount] = useState("");
+  function runRedeem() {
+    const a = parseFloat(redeemAmount.replace(",", "."));
+    if (!redeemName.trim() || !a || a <= 0) {
+      toast("Preencha nome e valor válidos");
+      return;
+    }
+    if (a > cofrinho.balance) {
+      toast.error("Saldo insuficiente", { description: `Saldo atual: ${brl(cofrinho.balance)}` });
+      return;
+    }
+    redeemReward(redeemName.trim(), a);
+    toast.success("Resgate registrado! 🎁", { description: `${redeemName.trim()} · −${brl(a)}` });
+    setRedeemName("");
+    setRedeemAmount("");
+  }
+
+  const grantedToday = (cofrinho.rewardGrantedDates ?? []).includes(todayKey());
 
   // visual: quantidade de moedas proporcional ao saldo
   const coinCount = Math.min(40, Math.max(0, Math.floor(cofrinho.balance / 10)));
@@ -181,6 +227,42 @@ function Cofrinho() {
             {status.perfect ? `LIBERADA · +${brl(cofrinho.dailyAmount)}` : "PENDENTE"}
           </span>
         </div>
+
+        {/* Verificar / conceder recompensa de hoje */}
+        <button
+          onClick={verifyToday}
+          className="no-tap mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold"
+          style={
+            grantedToday
+              ? { background: "var(--secondary)", color: "var(--muted-foreground)" }
+              : { background: "var(--primary)", color: "var(--primary-foreground)" }
+          }
+        >
+          <CalendarCheck className="h-4 w-4" />
+          {grantedToday ? "Recompensa de hoje já adicionada" : "Verificar recompensa de hoje"}
+        </button>
+      </Card>
+
+      {/* Diagnóstico do cofrinho */}
+      <SectionLabel>Diagnóstico</SectionLabel>
+      <Card className="space-y-2.5">
+        <DiagKV label="Valor diário configurado" value={brl(cofrinho.dailyAmount)} />
+        <DiagKV label="Saldo atual" value={brl(cofrinho.balance)} />
+        <DiagKV
+          label="Recompensa de hoje liberada"
+          value={status.perfect ? "Sim" : "Não"}
+          color={status.perfect ? "var(--primary)" : "var(--warning)"}
+        />
+        <DiagKV
+          label="Já concedida hoje"
+          value={grantedToday ? "Sim" : "Não"}
+          color={grantedToday ? "var(--primary)" : undefined}
+        />
+        <DiagKV
+          label="Última recompensa concedida"
+          value={cofrinho.lastRewardDate ? fmtDate(cofrinho.lastRewardDate) : "—"}
+        />
+        <DiagKV label="Exigências configuradas" value={status.active ? "Sim" : "Não (nenhuma)"} color={status.active ? undefined : "var(--warning)"} />
       </Card>
 
       {/* Configuração de recompensa */}
@@ -385,6 +467,33 @@ function Cofrinho() {
         })}
       </div>
 
+      {/* Resgate manual (compra avulsa) */}
+      <SectionLabel>Resgatar recompensa</SectionLabel>
+      <Card className="space-y-2">
+        <div className="flex gap-2">
+          <input
+            value={redeemName}
+            onChange={(e) => setRedeemName(e.target.value)}
+            placeholder="Ex: Carta Pokémon"
+            className="min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          />
+          <input
+            value={redeemAmount}
+            onChange={(e) => setRedeemAmount(e.target.value)}
+            inputMode="decimal"
+            placeholder="R$"
+            className="w-20 shrink-0 rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        <button
+          onClick={runRedeem}
+          className="no-tap flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold"
+        >
+          <Gift className="h-4 w-4" /> Resgatar do saldo
+        </button>
+        <p className="text-xs text-muted-foreground">Saldo disponível: {brl(cofrinho.balance)}</p>
+      </Card>
+
       {/* Histórico financeiro */}
       <SectionLabel>Histórico financeiro</SectionLabel>
       <Card>
@@ -445,6 +554,15 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{icon} {label}</div>
       <p className="mt-1 font-display text-lg font-bold" style={color ? { color } : undefined}>{value}</p>
     </Card>
+  );
+}
+
+function DiagKV({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-bold" style={color ? { color } : undefined}>{value}</span>
+    </div>
   );
 }
 
