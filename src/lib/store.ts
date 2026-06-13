@@ -240,6 +240,21 @@ export const DEFAULT_SETTINGS: Settings = {
   darkMode: "default",
 };
 
+/** Resultado de uma checagem/concessão da recompensa diária. */
+export interface CofrinhoCheckResult {
+  outcome: "granted" | "already" | "pending" | "no_rules";
+  amount: number;
+  missing: string[]; // requisitos pendentes (quando outcome === "pending")
+}
+
+/** Resultado de uma simulação (não altera dados reais). */
+export interface CofrinhoSimResult {
+  wouldGrant: boolean;
+  amount: number;
+  missing: string[];
+}
+
+
 interface State {
   tasks: Task[];
   habits: Habit[];
