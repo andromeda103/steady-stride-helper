@@ -209,6 +209,8 @@ export interface Cofrinho {
   balance: number; // saldo acumulado (ganho - resgatado)
   earnedByDay: Record<string, number>; // date -> R$ ganho
   perfectDays: string[]; // date keys de dias perfeitos
+  rewardGrantedDates: string[]; // dias em que a recompensa já foi concedida (evita duplicidade)
+  lastRewardDate: string | null; // último dia em que a recompensa foi concedida
   goals: RewardGoal[];
   history: RewardRedeem[]; // resgates (compat)
   ledger: LedgerEntry[]; // histórico financeiro unificado
@@ -224,6 +226,8 @@ export const DEFAULT_COFRINHO: Cofrinho = {
   balance: 0,
   earnedByDay: {},
   perfectDays: [],
+  rewardGrantedDates: [],
+  lastRewardDate: null,
   goals: [],
   history: [],
   ledger: [],
