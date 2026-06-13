@@ -366,6 +366,19 @@ function cofEvent(kind: CofrinhoEventKind, detail: string): CofrinhoEvent {
   return { id: uid(), at: Date.now(), kind, detail };
 }
 
+/** Human-readable list of which required criteria are still pending today. */
+function missingRequirements(status: ReturnType<typeof computeDayStatus>): string[] {
+  const missing: string[] = [];
+  if (status.habits.active && !status.habits.ok)
+    missing.push(`Hábitos (${status.habits.done}/${status.habits.total})`);
+  if (status.tasks.active && !status.tasks.ok)
+    missing.push(`Tarefas (${status.tasks.done}/${status.tasks.total})`);
+  if (status.study.active && !status.study.ok)
+    missing.push(`Estudo (${status.study.done}/${status.study.total} min)`);
+  if (status.workout.active && !status.workout.ok) missing.push("Treino do dia");
+  return missing;
+}
+
 interface CofInputs {
   cofrinho: Cofrinho;
   habits: Habit[];
