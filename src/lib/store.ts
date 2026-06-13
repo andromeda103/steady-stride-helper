@@ -783,6 +783,34 @@ export const useStore = create<State>()(
 
       recomputeCofrinho: () => set((s) => ({ cofrinho: recompCof(s) })),
 
+      checkTodayReward: () => {
+        const s = get();
+        const today = todayKey();
+        const status = computeDayStatus(s.cofrinho, s.habits, s.tasks, s.studyLog, s.workoutLog);
+        const missing = missingRequirements(status);
+        if ((s.cofrinho.rewardGrantedDates ?? []).includes(today)) {
+          return { outcome: "already", amount: s.cofrinho.earnedByDay[today] ?? 0, missing: [] };
+        }
+        if (!status.active) {
+          return { outcome: "no_rules", amount: 0, missing: [] };
+        }
+        if (!status.perfect) {
+          return { outcome: "pending", amount: 0, missing };
+        }
+        // Liberada e ainda não concedida → concede agora.
+        const cofrinho = recompCof(s);
+        set({ cofrinho });
+        return { outcome: "granted", amount: cofrinho.earnedByDay[today] ?? s.cofrinho.dailyAmount, missing: [] };
+      },
+
+      simulateToday: () => {
+        const s = get();
+        const status = computeDayStatus(s.cofrinho, s.habits, s.tasks, s.studyLog, s.workoutLog);
+        const missing = missingRequirements(status);
+        return { wouldGrant: status.perfect, amount: status.perfect ? s.cofrinho.dailyAmount : 0, missing };
+      },
+
+
       logCofrinhoEvent: (kind, detail) =>
         set((s) => ({
           cofrinho: { ...s.cofrinho, events: [cofEvent(kind, detail), ...s.cofrinho.events].slice(0, 120) },
