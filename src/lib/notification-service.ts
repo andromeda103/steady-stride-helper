@@ -19,7 +19,7 @@
 //   - Every error is captured with stage + message + stack + timestamp.
 // ============================================================================
 
-import { isNativePlatform } from "./platform";
+import { getPlatform, hasCapacitorPlugin, isNativePlatform } from "./platform";
 import {
   fireNotification as webFire,
   scheduleNotification as webSchedule,
@@ -65,7 +65,10 @@ function log(
 function captureError(stage: string, e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   const stack = e instanceof Error && e.stack ? `\n${e.stack.split("\n").slice(0, 3).join("\n")}` : "";
-  const detail = `[${stage}] ${msg}${stack}`;
+  const native = isNativePlatform();
+  const platform = getPlatform();
+  const pluginAvailable = hasCapacitorPlugin("LocalNotifications");
+  const detail = `[${new Date().toISOString()}] [${stage}] platform=${platform} native=${native} plugin=${pluginAvailable} ${msg}${stack}`;
   lastNativeError = detail;
   log("error", stage, detail);
   return detail;
@@ -73,7 +76,19 @@ function captureError(stage: string, e: unknown): string {
 
 /** Current delivery mode based on the runtime platform. */
 export function getNotificationMode(): NotificationMode {
-  return isNativePlatform() ? "android" : "web";
+  return isAndroidNativeReady() ? "android" : "web";
+}
+
+function getNativeRuntimeFlags() {
+  const native = isNativePlatform();
+  const platform = getPlatform();
+  const pluginAvailable = hasCapacitorPlugin("LocalNotifications");
+  return { native, platform, pluginAvailable };
+}
+
+function isAndroidNativeReady() {
+  const { native, platform, pluginAvailable } = getNativeRuntimeFlags();
+  return native && platform === "android" && pluginAvailable;
 }
 
 // ----------------------------------------------------------------------------
@@ -117,11 +132,14 @@ let lastCheckRaw = "";
 let lastRequestRaw = "";
 
 async function loadNativePlugin(): Promise<LocalNotificationsPlugin | null> {
-  if (getNotificationMode() !== "android") return null;
+  const { native, platform, pluginAvailable } = getNativeRuntimeFlags();
+  if (!native || platform !== "android" || !pluginAvailable) {
+    lastNativeError = `[${new Date().toISOString()}] [preflight] platform=${platform} native=${native} plugin=${pluginAvailable} Android nativo indisponível para LocalNotifications`;
+    return null;
+  }
   if (!nativePluginPromise) {
     nativePluginPromise = (async () => {
       try {
-        // Dynamic import — only ever reached inside the native Android shell.
         const mod = await import("@capacitor/local-notifications");
         const plugin = (mod.LocalNotifications ?? null) as unknown as LocalNotificationsPlugin | null;
         if (!plugin) {
@@ -209,7 +227,11 @@ async function ensureNativePermission(
 /** Diagnostic snapshot of the native notification adapter. */
 export async function getNativePluginStatus(): Promise<{
   mode: NotificationMode;
+  native: boolean;
+  platform: "web" | "android" | "ios";
+  selectedMethod: "native" | "web";
   pluginAvailable: boolean;
+  pluginImported: boolean;
   permission: "granted" | "denied" | "default" | "unsupported";
   channelCreated: boolean;
   listenersRegistered: boolean;
@@ -218,11 +240,16 @@ export async function getNativePluginStatus(): Promise<{
   requestRaw: string;
   lastError: string | null;
 }> {
+  const { native, platform, pluginAvailable } = getNativeRuntimeFlags();
   const mode = getNotificationMode();
-  if (mode !== "android") {
+  if (!(native && platform === "android")) {
     return {
       mode,
+      native,
+      platform,
+      selectedMethod: mode === "android" ? "native" : "web",
       pluginAvailable: false,
+      pluginImported: false,
       permission: "unsupported",
       channelCreated: false,
       listenersRegistered: false,
@@ -254,7 +281,11 @@ export async function getNativePluginStatus(): Promise<{
   }
   return {
     mode,
-    pluginAvailable: !!plugin,
+    native,
+    platform,
+    selectedMethod: mode === "android" ? "native" : "web",
+    pluginAvailable,
+    pluginImported: !!plugin,
     permission,
     channelCreated,
     listenersRegistered,
@@ -282,7 +313,7 @@ function toNativeId(id: string): number {
 export const notificationService = {
   /** Bootstrap the active engine. Call once on app start. */
   async init(): Promise<void> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const plugin = await loadNativePlugin();
       if (plugin) {
         await ensureChannel(plugin);
@@ -296,7 +327,7 @@ export const notificationService = {
 
   /** Request OS permission for notifications (full check → request → check). */
   async requestPermission(): Promise<"granted" | "denied" | "default" | "unsupported"> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const plugin = await loadNativePlugin();
       if (!plugin) return "unsupported";
       const r = await ensureNativePermission(plugin);
@@ -309,7 +340,7 @@ export const notificationService = {
 
   /** Current permission state without prompting. */
   async currentPermission(): Promise<"granted" | "denied" | "default" | "unsupported"> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const plugin = await loadNativePlugin();
       if (!plugin) return "unsupported";
       try {
@@ -327,7 +358,7 @@ export const notificationService = {
 
   /** Fire a notification (native: ~2s later via schedule; web: immediate). */
   async notify(title: string, body: string, options: NotifyOptions = {}): Promise<NotifyResult> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const plugin = await loadNativePlugin();
       if (!plugin) return { ok: false, mode: "android", message: "Plugin nativo indisponível" };
       const perm = await ensureNativePermission(plugin);
@@ -361,7 +392,7 @@ export const notificationService = {
 
   /** Schedule a notification after `delayMs`. Returns an id usable with cancel(). */
   async schedule(title: string, body: string, delayMs: number): Promise<string> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const id = nUid();
       const plugin = await loadNativePlugin();
       if (!plugin) {
@@ -399,7 +430,7 @@ export const notificationService = {
 
   /** Cancel a scheduled notification by id. */
   async cancel(id: string): Promise<void> {
-    if (getNotificationMode() === "android") {
+    if (isAndroidNativeReady()) {
       const plugin = await loadNativePlugin();
       useStore.getState().removeScheduled(id);
       if (plugin && nativeIdMap.has(id)) {
@@ -415,5 +446,125 @@ export const notificationService = {
     webCancel(id);
   },
 };
+
+export async function runNativeDirectTest(): Promise<{
+  ok: boolean;
+  native: boolean;
+  platform: "web" | "android" | "ios";
+  pluginAvailable: boolean;
+  pluginImported: boolean;
+  permission: "granted" | "denied" | "default" | "unsupported";
+  pendingHasTestId: boolean;
+  pendingCount: number;
+  message: string;
+  detail?: string;
+}> {
+  const { native, platform, pluginAvailable } = getNativeRuntimeFlags();
+
+  if (!(native && platform === "android" && pluginAvailable)) {
+    const detail = `[${new Date().toISOString()}] [direct-test-preflight] platform=${platform} native=${native} plugin=${pluginAvailable} Pré-condições nativas não atendidas`;
+    lastNativeError = detail;
+    log("error", "Teste nativo direto", detail);
+    return {
+      ok: false,
+      native,
+      platform,
+      pluginAvailable,
+      pluginImported: false,
+      permission: "unsupported",
+      pendingHasTestId: false,
+      pendingCount: 0,
+      message: "Pré-condições nativas não atendidas",
+      detail,
+    };
+  }
+
+  const plugin = await loadNativePlugin();
+  if (!plugin) {
+    return {
+      ok: false,
+      native,
+      platform,
+      pluginAvailable,
+      pluginImported: false,
+      permission: "unsupported",
+      pendingHasTestId: false,
+      pendingCount: 0,
+      message: "Falha ao importar plugin nativo",
+      detail: lastNativeError ?? undefined,
+    };
+  }
+
+  try {
+    let permission = await ensureNativePermission(plugin);
+    if (permission !== "granted") {
+      return {
+        ok: false,
+        native,
+        platform,
+        pluginAvailable,
+        pluginImported: true,
+        permission,
+        pendingHasTestId: false,
+        pendingCount: 0,
+        message: `Permissão: ${permission}`,
+      };
+    }
+
+    await ensureChannel(plugin);
+    await registerListeners(plugin);
+
+    await plugin.cancel({ notifications: [{ id: 10001 }] }).catch(() => undefined);
+    await plugin.schedule({
+      notifications: [
+        {
+          id: 10001,
+          title: "Teste imediato ✅",
+          body: "Notificação nativa agendada para 3 segundos.",
+          channelId: CHANNEL_ID,
+          schedule: { at: new Date(Date.now() + 3000), allowWhileIdle: true },
+        },
+      ],
+    });
+
+    const pend = (await plugin.getPending?.()) ?? { notifications: [] };
+    const pendingHasTestId = pend.notifications.some((notification) => notification.id === 10001);
+    log(
+      pendingHasTestId ? "sent" : "error",
+      "Teste nativo direto",
+      pendingHasTestId ? "ID 10001 agendado com sucesso" : "ID 10001 não encontrado em getPending()",
+    );
+
+    permission = await ensureNativePermission(plugin);
+
+    return {
+      ok: pendingHasTestId,
+      native,
+      platform,
+      pluginAvailable,
+      pluginImported: true,
+      permission,
+      pendingHasTestId,
+      pendingCount: pend.notifications.length,
+      message: pendingHasTestId
+        ? "Notificação nativa ID 10001 agendada para 3s"
+        : "Agendamento não apareceu em getPending()",
+    };
+  } catch (e) {
+    const detail = captureError("direct-test", e);
+    return {
+      ok: false,
+      native,
+      platform,
+      pluginAvailable,
+      pluginImported: true,
+      permission: "default",
+      pendingHasTestId: false,
+      pendingCount: 0,
+      message: "Erro no teste nativo direto",
+      detail,
+    };
+  }
+}
 
 export type NotificationService = typeof notificationService;
