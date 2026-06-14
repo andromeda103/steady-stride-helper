@@ -25,8 +25,13 @@ import {
   cancelScheduled,
   getNotificationDiagnosticSnapshot,
 } from "@/lib/notify";
-import { notificationService, getNotificationMode, getNativePluginStatus } from "@/lib/notification-service";
-import { getPlatform } from "@/lib/platform";
+import {
+  notificationService,
+  getNotificationMode,
+  getNativePluginStatus,
+  runNativeDirectTest,
+} from "@/lib/notification-service";
+import { getPlatform, hasCapacitorPlugin, isNativePlatform } from "@/lib/platform";
 
 type NativeStatus = Awaited<ReturnType<typeof getNativePluginStatus>>;
 
@@ -57,7 +62,12 @@ function Diagnostico() {
   const clearNotifLog = useStore((s) => s.clearNotifLog);
 
   // Environment is resolved once on the client (SSR-safe defaults).
-  const [env, setEnv] = useState<{ mode: "web" | "android"; platform: string }>({ mode: "web", platform: "web" });
+  const [env, setEnv] = useState<{
+    mode: "web" | "android";
+    platform: "web" | "android" | "ios";
+    native: boolean;
+    pluginAvailable: boolean;
+  }>({ mode: "web", platform: "web", native: false, pluginAvailable: false });
   const isNative = env.mode === "android";
   const methodLabel = isNative ? "Capacitor Local Notifications" : "Web Notifications / Service Worker";
   const envLabel = isNative ? "APK Android (Capacitor)" : "Navegador / PWA";
@@ -70,7 +80,12 @@ function Diagnostico() {
 
   useEffect(() => {
     async function loadSnapshot() {
-      setEnv({ mode: getNotificationMode(), platform: getPlatform() });
+      setEnv({
+        mode: getNotificationMode(),
+        platform: getPlatform(),
+        native: isNativePlatform(),
+        pluginAvailable: hasCapacitorPlugin("LocalNotifications"),
+      });
       const p = await notificationService.currentPermission();
       setPerm(p);
       if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
@@ -112,15 +127,25 @@ function Diagnostico() {
   }
 
   async function refreshStatus() {
-    setEnv({ mode: getNotificationMode(), platform: getPlatform() });
+    setEnv({
+      mode: getNotificationMode(),
+      platform: getPlatform(),
+      native: isNativePlatform(),
+      pluginAvailable: hasCapacitorPlugin("LocalNotifications"),
+    });
     setPerm(await notificationService.currentPermission());
     setSnapshot(await getNotificationDiagnosticSnapshot());
     setNativeStatus(await getNativePluginStatus());
   }
 
   async function runNowTest() {
-    const result = await notificationService.notify("Teste imediato ✅", "Se você viu isso, está funcionando!");
-    setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+    if (env.native && env.platform === "android" && env.pluginAvailable) {
+      const result = await runNativeDirectTest();
+      setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+    } else {
+      const result = await notificationService.notify("Teste imediato ✅", "Se você viu isso, está funcionando!");
+      setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+    }
     await refreshStatus();
   }
 
@@ -158,8 +183,41 @@ function Diagnostico() {
         <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
       </Card>
 
+      <Card className="mt-3 space-y-3">
+        <StatusLine
+          icon={<Smartphone className="h-4 w-4" />}
+          label="Capacitor.isNativePlatform()"
+          value={env.native ? "true" : "false"}
+          color={env.native ? "var(--primary)" : "var(--danger)"}
+        />
+        <StatusLine
+          icon={<Smartphone className="h-4 w-4" />}
+          label="Capacitor.getPlatform()"
+          value={env.platform}
+          color={env.platform === "android" ? "var(--primary)" : env.platform === "ios" ? "var(--warning)" : undefined}
+        />
+        <StatusLine
+          icon={<Bot className="h-4 w-4" />}
+          label='Capacitor.isPluginAvailable("LocalNotifications")'
+          value={env.pluginAvailable ? "true" : "false"}
+          color={env.pluginAvailable ? "var(--primary)" : "var(--danger)"}
+        />
+        <StatusLine
+          icon={<BellRing className="h-4 w-4" />}
+          label="Método selecionado"
+          value={nativeStatus?.selectedMethod === "native" ? "native" : "web"}
+          color={nativeStatus?.selectedMethod === "native" ? "var(--primary)" : "var(--warning)"}
+        />
+        <StatusLine
+          icon={<Bot className="h-4 w-4" />}
+          label="plugin importado"
+          value={nativeStatus?.pluginImported ? "true" : "false"}
+          color={nativeStatus?.pluginImported ? "var(--primary)" : "var(--warning)"}
+        />
+      </Card>
+
       {/* Detalhes nativos (APK Android) */}
-      {isNative && (
+      {env.native && env.platform === "android" && (
         <Card className="mt-3 space-y-3">
           <StatusLine
             icon={<Smartphone className="h-4 w-4" />}
@@ -299,7 +357,7 @@ function Diagnostico() {
           onClick={() => void runNowTest()}
           className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground"
         >
-          <BellRing className="h-4 w-4" /> Testar agora ({isNative ? "nativo" : "web"})
+          <BellRing className="h-4 w-4" /> Testar agora ({env.native && env.platform === "android" && env.pluginAvailable ? "nativo direto" : isNative ? "nativo" : "web"})
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
