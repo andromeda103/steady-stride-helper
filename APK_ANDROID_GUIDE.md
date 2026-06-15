@@ -35,6 +35,74 @@ cliente — é exatamente o que o Capacitor precisa.
 
 ---
 
+## 1b. Notificações nativas (smoke test `native-v6`)
+
+A correção definitiva das notificações nativas usa um teste isolado e
+verificável. Pontos-chave:
+
+- `src/lib/native-notify-smoke.ts` — **novo**. Teste independente (sem Zustand,
+  Supabase, rotina, hábitos, Service Worker ou fallback web). Importa
+  `@capacitor/local-notifications` **diretamente** quando
+  `Capacitor.isNativePlatform()` é `true` e `Capacitor.getPlatform() === "android"`.
+  **`Capacitor.isPluginAvailable()` é apenas diagnóstico — não bloqueia mais o fluxo.**
+- `android/app/src/main/AndroidManifest.xml` — adicionada
+  `android.permission.POST_NOTIFICATIONS` (obrigatória no Android 13+ para o
+  diálogo de permissão aparecer).
+- IDs fixos de teste: `10001` (Testar agora), `10002` (10s), `10003` (1 min).
+- A tela de Diagnóstico mostra a versão `native-v6` e cada etapa real
+  (clique → plataforma → import → permissão antes/depois → canal → schedule →
+  getPending). Logs no console têm prefixo `[LEVELUP-NOTIFY]`.
+
+### Sincronizar e gerar o APK (PowerShell, na sua máquina)
+
+```powershell
+cd "C:\Users\gabri\Documents\new\steady-stride-helper"
+
+npm install
+
+Remove-Item -Recurse -Force .\dist -ErrorAction SilentlyContinue
+npm run build:android
+
+Remove-Item -Recurse -Force .\android\app\src\main\assets -ErrorAction SilentlyContinue
+npx cap sync android
+```
+
+Depois confirme que estes arquivos foram **gerados pelo `cap sync`** (não os
+crie manualmente):
+
+```
+android/app/src/main/assets/capacitor.config.json   ->  "webDir": "dist"
+android/app/src/main/assets/capacitor.plugins.json  ->  contém @capacitor/local-notifications
+```
+
+Compile o APK:
+
+```powershell
+cd android
+
+$env:JAVA_HOME="D:\android\jbr"
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+
+$sdk = "$env:LOCALAPPDATA\Android\Sdk"
+$sdkProp = $sdk -replace '\\','/'
+Set-Content -Path .\local.properties -Value "sdk.dir=$sdkProp"
+
+.\gradlew.bat clean assembleDebug
+```
+
+### Como validar no APK
+
+1. Abra o app → aba **Você** → **Diagnóstico de notificações**.
+2. Confirme `Diagnóstico nativo: native-v6`, `native = true`, `platform = android`.
+3. Toque **Testar agora** → o contador de cliques sobe na hora.
+4. Aceite o diálogo de permissão (Android 13+).
+5. A notificação **ID 10001** deve aparecer em ~5 segundos (app aberto).
+6. Verifique `ID encontrado nos pendentes = Sim`.
+7. Tocar na notificação registra `action` no log.
+
+---
+
+
 ## 2. Pré-requisitos (uma vez)
 
 Feito na **sua máquina** (o ambiente Lovable é web-only):
