@@ -499,20 +499,23 @@ function Diagnostico() {
       <div className="grid grid-cols-1 gap-2">
         <button
           onClick={() => void runNowTest()}
-          className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground"
+          disabled={busy}
+          className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-60"
         >
-          <BellRing className="h-4 w-4" /> Testar agora ({env.native && env.platform === "android" && env.pluginAvailable ? "nativo direto" : isNative ? "nativo" : "web"})
+          <BellRing className="h-4 w-4" /> Testar agora ({env.native && env.platform === "android" ? "smoke nativo · ID 10001" : "web"})
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => void runScheduledTest(10)}
-            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
+            disabled={busy}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-60"
           >
             <Clock className="h-4 w-4" /> Em 10s
           </button>
           <button
             onClick={() => void runScheduledTest(60)}
-            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold"
+            disabled={busy}
+            className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-60"
           >
             <Clock className="h-4 w-4" /> Em 1 min
           </button>
