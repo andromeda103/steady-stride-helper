@@ -29,9 +29,18 @@ import {
   notificationService,
   getNotificationMode,
   getNativePluginStatus,
-  runNativeDirectTest,
 } from "@/lib/notification-service";
 import { getPlatform, hasCapacitorPlugin, isNativePlatform } from "@/lib/platform";
+import {
+  NOTIFICATION_DIAGNOSTIC_VERSION,
+  runNativeNotificationSmokeTest,
+  runNativeTest10s,
+  runNativeTest60s,
+  requestNativePermission,
+  getSmokeLog,
+  type SmokeReport,
+  type SmokeLogEntry,
+} from "@/lib/native-notify-smoke";
 
 type NativeStatus = Awaited<ReturnType<typeof getNativePluginStatus>>;
 
