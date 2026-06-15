@@ -248,6 +248,69 @@ function Diagnostico() {
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
 
+      {/* ===== Diagnóstico nativo (native-v6) ===== */}
+      <Card className="space-y-3" style={{ borderColor: "color-mix(in oklab, var(--primary) 45%, transparent)" }}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold">Diagnóstico nativo</span>
+          <span
+            className="rounded-full px-3 py-1 text-xs font-bold"
+            style={{ background: "color-mix(in oklab, var(--primary) 18%, transparent)", color: "var(--primary)" }}
+          >
+            {NOTIFICATION_DIAGNOSTIC_VERSION}
+          </span>
+        </div>
+        <StatusLine
+          icon={<PlayCircle className="h-4 w-4" />}
+          label="Clique capturado"
+          value={clickCount > 0 ? "Sim" : "Nenhum teste nativo executado."}
+          color={clickCount > 0 ? "var(--primary)" : "var(--warning)"}
+        />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="Quantidade de cliques" value={String(clickCount)} />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="Último botão" value={lastButton} />
+        <StatusLine icon={<Clock className="h-4 w-4" />} label="Horário do clique" value={clickedAt ? fmtTime(clickedAt) : "—"} />
+        <StatusLine
+          icon={<PlayCircle className="h-4 w-4" />}
+          label="Etapa atual"
+          value={busy ? `⏳ ${currentStage}` : currentStage}
+          color={busy ? "var(--warning)" : undefined}
+        />
+        <StatusLine icon={<Bot className="h-4 w-4" />} label="plugin importado" value={smoke ? (smoke.pluginImported ? "true" : "false") : "—"} color={smoke?.pluginImported ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
+        <StatusLine icon={<Bell className="h-4 w-4" />} label="permissão antes" value={smoke?.permissionBefore ?? "—"} />
+        <StatusLine icon={<Bell className="h-4 w-4" />} label="requestPermissions" value={smoke?.permissionRequested ?? "—"} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="permissão depois" value={smoke?.permissionAfter ?? "—"} color={smoke?.permissionAfter === "granted" ? "var(--primary)" : smoke?.permissionAfter ? "var(--danger)" : undefined} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="canal criado" value={smoke ? (smoke.channelCreated ? "true" : "false") : "—"} color={smoke?.channelCreated ? "var(--primary)" : undefined} />
+        <StatusLine icon={<Send className="h-4 w-4" />} label="schedule resolvido" value={smoke ? (smoke.scheduleResolved ? "true" : "false") : "—"} color={smoke?.scheduleResolved ? "var(--primary)" : undefined} />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="ID do teste" value={smoke ? String(smoke.notificationId) : "—"} />
+        <StatusLine icon={<Clock className="h-4 w-4" />} label="horário programado" value={smoke?.scheduledAt ? fmtTime(new Date(smoke.scheduledAt).getTime()) : "—"} />
+        <StatusLine icon={<Inbox className="h-4 w-4" />} label="IDs pendentes" value={smoke ? (smoke.pendingIds.length ? smoke.pendingIds.join(", ") : "nenhum") : "—"} />
+        <StatusLine icon={<CheckCircle2 className="h-4 w-4" />} label="ID encontrado nos pendentes" value={smoke ? (smoke.foundInPending ? "Sim" : "Não") : "—"} color={smoke?.foundInPending ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
+        <StatusLine icon={<AlertTriangle className="h-4 w-4" />} label="último erro" value={smoke?.error ? smoke.error.message : "Nenhum"} color={smoke?.error ? "var(--danger)" : undefined} />
+      </Card>
+
+      {/* Smoke-test log */}
+      {smokeLog.length > 0 && (
+        <Card className="mt-3 space-y-1.5 p-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Logs [LEVELUP-NOTIFY]</p>
+          {smokeLog.slice(0, 25).map((l, i) => (
+            <div key={`${l.timestamp}-${i}`} className="flex items-start gap-2 border-b border-border/40 pb-1 last:border-0">
+              {l.success ? (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
+              ) : (
+                <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--danger)" }} />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs">
+                  <span className="font-semibold">{l.stage}</span>
+                  <span className="text-muted-foreground"> · {fmtTime(new Date(l.timestamp).getTime())}</span>
+                </p>
+                <p className="break-words text-xs text-muted-foreground">{l.message}</p>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+
+
       {/* Ambiente atual */}
       <Card className="space-y-3">
         <StatusLine
