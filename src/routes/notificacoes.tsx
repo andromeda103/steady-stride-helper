@@ -84,8 +84,42 @@ function Diagnostico() {
   const [perm, setPerm] = useState<string>("default");
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
   const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
-  const [testResult, setTestResult] = useState<string>("Nenhum teste executado ainda.");
+  const [testResult, setTestResult] = useState<string>("Nenhum teste nativo executado.");
   const [, setTick] = useState(0);
+
+  // --- Native smoke-test diagnostic state (native-v6) ---
+  const [smoke, setSmoke] = useState<SmokeReport | null>(null);
+  const [smokeLog, setSmokeLog] = useState<SmokeLogEntry[]>([]);
+  const [clickCount, setClickCount] = useState(0);
+  const [lastButton, setLastButton] = useState<string>("—");
+  const [clickedAt, setClickedAt] = useState<number | null>(null);
+  const [currentStage, setCurrentStage] = useState<string>("idle");
+  const [busy, setBusy] = useState(false);
+
+  /** Capture the click IMMEDIATELY (before any await) so the UI changes at once. */
+  function captureClick(button: string) {
+    setClickCount((c) => c + 1);
+    setLastButton(button);
+    setClickedAt(Date.now());
+    setCurrentStage(`executando: ${button}`);
+    setBusy(true);
+    // eslint-disable-next-line no-console
+    console.log("[LEVELUP-NOTIFY] click", { button, at: new Date().toISOString() });
+  }
+
+  function applyReport(report: SmokeReport) {
+    setSmoke(report);
+    setSmokeLog(getSmokeLog());
+    setCurrentStage(report.error ? `erro: ${report.error.message}` : report.foundInPending ? "agendado (pendente)" : "concluído");
+    setTestResult(
+      report.error
+        ? `❌ ${report.error.message}`
+        : report.foundInPending
+          ? `✅ ID ${report.notificationId} agendado — deve aparecer em instantes.`
+          : `⚠️ schedule() rodou mas ID ${report.notificationId} não apareceu em getPending().`,
+    );
+    if (report.permissionAfter) setPerm(report.permissionAfter === "prompt" ? "default" : report.permissionAfter);
+  }
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -100,6 +134,7 @@ function Diagnostico() {
       if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
       setSnapshot(await getNotificationDiagnosticSnapshot());
       setNativeStatus(await getNativePluginStatus());
+      setSmokeLog(getSmokeLog());
     }
     void loadSnapshot();
   }, [setNotifPermission]);
@@ -116,22 +151,41 @@ function Diagnostico() {
   const lastError = notifLog.find((e) => e.kind === "error");
 
   async function ask() {
-    const r = await notificationService.requestPermission();
-    setPerm(r);
-    setSnapshot(await getNotificationDiagnosticSnapshot());
-    if (r === "granted") {
-      setNotifPermission("granted");
-      const result = await notificationService.notify("Notificações ativadas!", "Tudo certo para receber lembretes.");
-      setTestResult(result.message);
-    } else if (r === "denied") {
-      setTestResult("Permissão negada");
-      toast("Permissão negada", { description: "Ative nas permissões do site/app." });
-    } else if (r === "unsupported") {
-      setTestResult(
-        isNative
-          ? "Plugin nativo indisponível neste build."
-          : "Este navegador não suporta notificações web.",
-      );
+    captureClick("Permitir notificações");
+    try {
+      if (env.native && env.platform === "android") {
+        const r = await requestNativePermission();
+        setSmokeLog(getSmokeLog());
+        const display = r.after ?? r.before ?? "default";
+        setPerm(display === "prompt" ? "default" : display);
+        if (r.granted) {
+          setNotifPermission("granted");
+          setTestResult("✅ Permissão concedida. Use 'Testar agora' para disparar a notificação.");
+        } else if (display === "denied") {
+          setTestResult("Permissão negada — ative manualmente nas configurações do app Android.");
+          toast("Permissão negada", { description: "Ative nas configurações do app Android." });
+        } else {
+          setTestResult(r.error ? `❌ ${r.error.message}` : `Permissão: ${display}`);
+        }
+        setCurrentStage(r.granted ? "permissão concedida" : `permissão: ${display}`);
+      } else {
+        const r = await notificationService.requestPermission();
+        setPerm(r);
+        setSnapshot(await getNotificationDiagnosticSnapshot());
+        if (r === "granted") {
+          setNotifPermission("granted");
+          const result = await notificationService.notify("Notificações ativadas!", "Tudo certo para receber lembretes.");
+          setTestResult(result.message);
+        } else if (r === "denied") {
+          setTestResult("Permissão negada");
+          toast("Permissão negada", { description: "Ative nas permissões do site." });
+        } else if (r === "unsupported") {
+          setTestResult("Este navegador não suporta notificações web.");
+        }
+        setCurrentStage(`permissão (web): ${r}`);
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -145,24 +199,42 @@ function Diagnostico() {
     setPerm(await notificationService.currentPermission());
     setSnapshot(await getNotificationDiagnosticSnapshot());
     setNativeStatus(await getNativePluginStatus());
+    setSmokeLog(getSmokeLog());
   }
 
   async function runNowTest() {
-    if (env.native && env.platform === "android" && env.pluginAvailable) {
-      const result = await runNativeDirectTest();
-      setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
-    } else {
-      const result = await notificationService.notify("Teste imediato ✅", "Se você viu isso, está funcionando!");
-      setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+    captureClick("Testar agora");
+    try {
+      if (env.native && env.platform === "android") {
+        const report = await runNativeNotificationSmokeTest();
+        applyReport(report);
+      } else {
+        const result = await notificationService.notify("Teste imediato ✅", "Se você viu isso, está funcionando!");
+        setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
+        setCurrentStage("teste web concluído");
+      }
+      await refreshStatus();
+    } finally {
+      setBusy(false);
     }
-    await refreshStatus();
   }
 
   async function runScheduledTest(seconds: number) {
-    await notificationService.schedule(`Teste ${seconds}s ⏱️`, `Notificação agendada há ${seconds} segundos.`, seconds * 1000);
-    setTestResult(`Agendamento criado para ${seconds}s usando ${methodLabel}.`);
-    toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
-    await refreshStatus();
+    captureClick(`Em ${seconds === 60 ? "1 min" : `${seconds}s`}`);
+    try {
+      if (env.native && env.platform === "android") {
+        const report = seconds === 60 ? await runNativeTest60s() : await runNativeTest10s();
+        applyReport(report);
+      } else {
+        await notificationService.schedule(`Teste ${seconds}s ⏱️`, `Notificação agendada há ${seconds} segundos.`, seconds * 1000);
+        setTestResult(`Agendamento criado para ${seconds}s usando ${methodLabel}.`);
+        toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
+        setCurrentStage(`agendamento web ${seconds}s`);
+      }
+      await refreshStatus();
+    } finally {
+      setBusy(false);
+    }
   }
 
   const permLabel =
