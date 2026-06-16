@@ -6,7 +6,7 @@ import { useStore } from "@/lib/store";
 import { Card, PageTitle, SectionLabel } from "@/components/primitives";
 import { ProgressRing } from "@/components/ProgressRing";
 import { formatClock, formatHours, todayKey, startOfWeekKey } from "@/lib/dates";
-import { fireNotification } from "@/lib/notify";
+import { notificationService } from "@/lib/notification-service";
 
 export const Route = createFileRoute("/estudos")({
   head: () => ({ meta: [{ title: "Estudos — LevelUp" }] }),
