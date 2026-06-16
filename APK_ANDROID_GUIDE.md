@@ -35,23 +35,35 @@ cliente — é exatamente o que o Capacitor precisa.
 
 ---
 
-## 1b. Notificações nativas (smoke test `native-v6`)
+## 1b. Notificações nativas — camada única (`native-v8-unified`)
 
-A correção definitiva das notificações nativas usa um teste isolado e
-verificável. Pontos-chave:
+Todo o fluxo de notificações foi **consolidado em uma única camada**. Não há
+mais sistemas paralelos competindo.
 
-- `src/lib/native-notify-smoke.ts` — **novo**. Teste independente (sem Zustand,
-  Supabase, rotina, hábitos, Service Worker ou fallback web). Importa
-  `@capacitor/local-notifications` **diretamente** quando
-  `Capacitor.isNativePlatform()` é `true` e `Capacitor.getPlatform() === "android"`.
-  **`Capacitor.isPluginAvailable()` é apenas diagnóstico — não bloqueia mais o fluxo.**
-- `android/app/src/main/AndroidManifest.xml` — adicionada
-  `android.permission.POST_NOTIFICATIONS` (obrigatória no Android 13+ para o
-  diálogo de permissão aparecer).
-- IDs fixos de teste: `10001` (Testar agora), `10002` (10s), `10003` (1 min).
-- A tela de Diagnóstico mostra a versão `native-v6` e cada etapa real
-  (clique → plataforma → import → permissão antes/depois → canal → schedule →
-  getPending). Logs no console têm prefixo `[LEVELUP-NOTIFY]`.
+- `src/lib/notification-service.ts` — **API pública central** usada por todo o
+  app (rotina, estudos, hábitos, lembretes). Decisão única em cada operação:
+  `Capacitor.isNativePlatform()` → plugin nativo; senão → fallback web. A
+  detecção é **dinâmica** (lida no momento da operação, nunca em constante de
+  módulo) e o `import("@capacitor/local-notifications")` é **dinâmico e não
+  bloqueado por `isPluginAvailable()`** (que agora é apenas diagnóstico). Todas
+  as chamadas nativas têm timeout de 10s para a tela nunca travar.
+- `src/lib/native-notify-smoke.ts` — teste nativo **isolado** (sem Zustand,
+  Supabase, rotina, hábitos, Service Worker ou fallback web). IDs fixos `10001`
+  (Testar agora), `10002` (10s), `10003` (1 min).
+- `src/routes/notificacoes.tsx` — apenas interface e handlers. O "método
+  selecionado" é calculado **ao vivo** (`isNativePlatform() ? "native" : "web"`)
+  e nunca é sobrescrito por um snapshot antigo. Há um **botão HTML puro**
+  ("EXECUTAR TESTE NATIVO DIRETO") com `onPointerDown` + `onClick` para provar
+  que o toque chega ao handler. Quando algo ainda não foi consultado, a tela
+  mostra **"Não verificado"** em vez de "web"/"false"/"Não".
+- `src/routes/__root.tsx` — `initializeNotificationListeners()` (singleton) é
+  registrado **uma única vez**, dentro de `useEffect`, somente no runtime nativo.
+- `android/app/src/main/AndroidManifest.xml` — `android.permission.POST_NOTIFICATIONS`
+  (obrigatória no Android 13+ para o diálogo de permissão aparecer).
+
+Logs no console têm prefixo `[LEVELUP-NOTIFY]`. A tela de Diagnóstico mostra a
+versão `native-v8-unified` e cada etapa real (pointerDown → click → import →
+permissão antes/depois → canal → schedule → getPending).
 
 ### Sincronizar e gerar o APK (PowerShell, na sua máquina)
 
