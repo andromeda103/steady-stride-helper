@@ -57,7 +57,7 @@ function Estudos() {
       setPhase("break");
       setLeft(pomodoro.breakMin * 60);
     } else {
-      fireNotification("Descanso terminou", "Pronto para mais um ciclo de foco?");
+      void notificationService.notify("Descanso terminou", "Pronto para mais um ciclo de foco?");
       setPhase("focus");
       setLeft(pomodoro.focusMin * 60);
       setRunning(false);
