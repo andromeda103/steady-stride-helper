@@ -134,6 +134,10 @@ function RootComponent() {
 
   useEffect(() => {
     void notificationService.init();
+    // Register native notification listeners exactly once (singleton), only on device.
+    if (isNativeRuntime()) {
+      void initializeNotificationListeners();
+    }
     initSync();
   }, []);
 
