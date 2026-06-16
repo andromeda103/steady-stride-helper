@@ -53,7 +53,7 @@ function Estudos() {
       const subj = subjects.find((s) => s.id === selected);
       logStudy(selected, pomodoro.focusMin * 60);
       addPomodoroMinutes(pomodoro.focusMin);
-      fireNotification("Foco concluído!", `+${pomodoro.focusMin}min em ${subj?.name ?? "estudo"}. Hora do descanso.`);
+      void notificationService.notify("Foco concluído!", `+${pomodoro.focusMin}min em ${subj?.name ?? "estudo"}. Hora do descanso.`);
       setPhase("break");
       setLeft(pomodoro.breakMin * 60);
     } else {
