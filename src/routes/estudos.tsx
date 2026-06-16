@@ -6,7 +6,7 @@ import { useStore } from "@/lib/store";
 import { Card, PageTitle, SectionLabel } from "@/components/primitives";
 import { ProgressRing } from "@/components/ProgressRing";
 import { formatClock, formatHours, todayKey, startOfWeekKey } from "@/lib/dates";
-import { fireNotification } from "@/lib/notify";
+import { notificationService } from "@/lib/notification-service";
 
 export const Route = createFileRoute("/estudos")({
   head: () => ({ meta: [{ title: "Estudos — LevelUp" }] }),
@@ -53,11 +53,11 @@ function Estudos() {
       const subj = subjects.find((s) => s.id === selected);
       logStudy(selected, pomodoro.focusMin * 60);
       addPomodoroMinutes(pomodoro.focusMin);
-      fireNotification("Foco concluído!", `+${pomodoro.focusMin}min em ${subj?.name ?? "estudo"}. Hora do descanso.`);
+      void notificationService.notify("Foco concluído!", `+${pomodoro.focusMin}min em ${subj?.name ?? "estudo"}. Hora do descanso.`);
       setPhase("break");
       setLeft(pomodoro.breakMin * 60);
     } else {
-      fireNotification("Descanso terminou", "Pronto para mais um ciclo de foco?");
+      void notificationService.notify("Descanso terminou", "Pronto para mais um ciclo de foco?");
       setPhase("focus");
       setLeft(pomodoro.focusMin * 60);
       setRunning(false);

@@ -26,7 +26,7 @@
 
 import { Capacitor } from "@capacitor/core";
 
-export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v6";
+export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v8-unified";
 
 const LOG_PREFIX = "[LEVELUP-NOTIFY]";
 const TEST_CHANNEL_ID = "levelup_native_test";
