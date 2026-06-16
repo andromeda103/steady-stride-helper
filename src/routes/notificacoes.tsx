@@ -21,28 +21,25 @@ import {
 import { toast } from "sonner";
 import { useStore, type NotifKind } from "@/lib/store";
 import { Card, PageTitle, SectionLabel } from "@/components/primitives";
-import {
-  cancelScheduled,
-  getNotificationDiagnosticSnapshot,
-} from "@/lib/notify";
+import { cancelScheduled, getNotificationDiagnosticSnapshot } from "@/lib/notify";
 import {
   notificationService,
-  getNotificationMode,
+  getNotificationRuntime,
   getNativePluginStatus,
+  requestNotificationPermission,
+  type NativePluginStatus,
 } from "@/lib/notification-service";
-import { getPlatform, hasCapacitorPlugin, isNativePlatform } from "@/lib/platform";
 import {
   NOTIFICATION_DIAGNOSTIC_VERSION,
   runNativeNotificationSmokeTest,
   runNativeTest10s,
   runNativeTest60s,
-  requestNativePermission,
   getSmokeLog,
   type SmokeReport,
   type SmokeLogEntry,
 } from "@/lib/native-notify-smoke";
 
-type NativeStatus = Awaited<ReturnType<typeof getNativePluginStatus>>;
+const NOT_VERIFIED = "Não verificado";
 
 export const Route = createFileRoute("/notificacoes")({
   head: () => ({ meta: [{ title: "Diagnóstico de Notificações — LevelUp" }] }),
@@ -64,53 +61,69 @@ function fmtTime(ts: number) {
   return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+/** Tri-state value: true → "Sim", false → "Não", null → "Não verificado". */
+function triLabel(v: boolean | null | undefined): string {
+  if (v === null || v === undefined) return NOT_VERIFIED;
+  return v ? "Sim" : "Não";
+}
+
 function Diagnostico() {
   const notifLog = useStore((s) => s.notifLog);
   const scheduled = useStore((s) => s.scheduled);
   const setNotifPermission = useStore((s) => s.setNotifPermission);
   const clearNotifLog = useStore((s) => s.clearNotifLog);
 
-  // Environment is resolved once on the client (SSR-safe defaults).
-  const [env, setEnv] = useState<{
-    mode: "web" | "android";
-    platform: "web" | "android" | "ios";
-    native: boolean;
-    pluginAvailable: boolean;
-  }>({ mode: "web", platform: "web", native: false, pluginAvailable: false });
-  const isNative = env.mode === "android";
+  // Live runtime (re-read on demand, never cached at module scope).
+  const [runtime, setRuntime] = useState(() => getNotificationRuntime());
+  const isNative = runtime.native;
   const methodLabel = isNative ? "Capacitor Local Notifications" : "Web Notifications / Service Worker";
-  const envLabel = isNative ? "APK Android (Capacitor)" : "Navegador / PWA";
+  const envLabel = isNative ? `APK ${runtime.platform === "ios" ? "iOS" : "Android"} (Capacitor)` : "Navegador / PWA";
 
-  const [perm, setPerm] = useState<string>("default");
+  const [perm, setPerm] = useState<string>(NOT_VERIFIED);
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof getNotificationDiagnosticSnapshot>> | null>(null);
-  const [nativeStatus, setNativeStatus] = useState<NativeStatus | null>(null);
-  const [testResult, setTestResult] = useState<string>("Nenhum teste nativo executado.");
-  const [, setTick] = useState(0);
+  const [nativeStatus, setNativeStatus] = useState<NativePluginStatus | null>(null);
+  const [testResult, setTestResult] = useState<string>("Nenhum teste executado.");
 
-  // --- Native smoke-test diagnostic state (native-v6) ---
+  // --- Unified diagnostic state (native-v8-unified) ---
   const [smoke, setSmoke] = useState<SmokeReport | null>(null);
   const [smokeLog, setSmokeLog] = useState<SmokeLogEntry[]>([]);
+  const [pointerCount, setPointerCount] = useState(0);
   const [clickCount, setClickCount] = useState(0);
-  const [lastButton, setLastButton] = useState<string>("—");
+  const [lastButton, setLastButton] = useState<string>(NOT_VERIFIED);
   const [clickedAt, setClickedAt] = useState<number | null>(null);
   const [currentStage, setCurrentStage] = useState<string>("idle");
   const [busy, setBusy] = useState(false);
+  const [, setTick] = useState(0);
 
-  /** Capture the click IMMEDIATELY (before any await) so the UI changes at once. */
+  /** Pointer reached the element (proves the touch was not swallowed). */
+  function capturePointer(button: string) {
+    setPointerCount((c) => c + 1);
+    // eslint-disable-next-line no-console
+    console.log("[LEVELUP-NOTIFY] pointerdown", { button, at: new Date().toISOString() });
+  }
+
+  /** Capture the click IMMEDIATELY (before any await) so the UI reacts at once. */
   function captureClick(button: string) {
     setClickCount((c) => c + 1);
     setLastButton(button);
     setClickedAt(Date.now());
-    setCurrentStage(`executando: ${button}`);
+    setCurrentStage(`click-captured: ${button}`);
     setBusy(true);
     // eslint-disable-next-line no-console
-    console.log("[LEVELUP-NOTIFY] click", { button, at: new Date().toISOString() });
+    console.log("[LEVELUP-NOTIFY] click", {
+      button,
+      native: runtime.native,
+      platform: runtime.platform,
+      at: new Date().toISOString(),
+    });
   }
 
   function applyReport(report: SmokeReport) {
     setSmoke(report);
     setSmokeLog(getSmokeLog());
-    setCurrentStage(report.error ? `erro: ${report.error.message}` : report.foundInPending ? "agendado (pendente)" : "concluído");
+    setCurrentStage(
+      report.error ? `erro: ${report.error.message}` : report.foundInPending ? "agendado (pendente)" : "concluído",
+    );
     setTestResult(
       report.error
         ? `❌ ${report.error.message}`
@@ -121,22 +134,39 @@ function Diagnostico() {
     if (report.permissionAfter) setPerm(report.permissionAfter === "prompt" ? "default" : report.permissionAfter);
   }
 
+  // Initial snapshot — does NOT auto-request permission.
   useEffect(() => {
+    let active = true;
     async function loadSnapshot() {
-      setEnv({
-        mode: getNotificationMode(),
-        platform: getPlatform(),
-        native: isNativePlatform(),
-        pluginAvailable: hasCapacitorPlugin("LocalNotifications"),
-      });
-      const p = await notificationService.currentPermission();
-      setPerm(p);
-      if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
-      setSnapshot(await getNotificationDiagnosticSnapshot());
-      setNativeStatus(await getNativePluginStatus());
-      setSmokeLog(getSmokeLog());
+      const rt = getNotificationRuntime();
+      if (!active) return;
+      setRuntime(rt);
+      try {
+        const p = await notificationService.currentPermission();
+        if (!active) return;
+        setPerm(p);
+        if (p !== "unsupported") setNotifPermission(p as NotificationPermission);
+      } catch {
+        /* surfaced via lastError */
+      }
+      try {
+        const snap = await getNotificationDiagnosticSnapshot();
+        if (active) setSnapshot(snap);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const ns = await getNativePluginStatus();
+        if (active) setNativeStatus(ns);
+      } catch {
+        /* ignore */
+      }
+      if (active) setSmokeLog(getSmokeLog());
     }
     void loadSnapshot();
+    return () => {
+      active = false;
+    };
   }, [setNotifPermission]);
 
   // refresh countdowns
@@ -150,24 +180,38 @@ function Diagnostico() {
   const lastReceived = notifLog.find((e) => e.kind === "received");
   const lastError = notifLog.find((e) => e.kind === "error");
 
+  /** Manual refresh (button only) — never auto-runs after a test. */
+  async function refreshStatus() {
+    captureClick("Atualizar diagnóstico");
+    try {
+      setRuntime(getNotificationRuntime());
+      setPerm(await notificationService.currentPermission());
+      setSnapshot(await getNotificationDiagnosticSnapshot());
+      setNativeStatus(await getNativePluginStatus());
+      setSmokeLog(getSmokeLog());
+      setCurrentStage("diagnóstico atualizado");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function ask() {
     captureClick("Permitir notificações");
     try {
-      if (env.native && env.platform === "android") {
-        const r = await requestNativePermission();
+      if (runtime.native) {
+        const r = await requestNotificationPermission();
         setSmokeLog(getSmokeLog());
-        const display = r.after ?? r.before ?? "default";
-        setPerm(display === "prompt" ? "default" : display);
-        if (r.granted) {
+        setPerm(r);
+        if (r === "granted") {
           setNotifPermission("granted");
           setTestResult("✅ Permissão concedida. Use 'Testar agora' para disparar a notificação.");
-        } else if (display === "denied") {
-          setTestResult("Permissão negada — ative manualmente nas configurações do app Android.");
-          toast("Permissão negada", { description: "Ative nas configurações do app Android." });
+        } else if (r === "denied") {
+          setTestResult("Permissão negada — ative manualmente nas configurações do app.");
+          toast("Permissão negada", { description: "Ative nas configurações do app." });
         } else {
-          setTestResult(r.error ? `❌ ${r.error.message}` : `Permissão: ${display}`);
+          setTestResult(`Permissão: ${r}`);
         }
-        setCurrentStage(r.granted ? "permissão concedida" : `permissão: ${display}`);
+        setCurrentStage(`permissão (nativa): ${r}`);
       } else {
         const r = await notificationService.requestPermission();
         setPerm(r);
@@ -189,23 +233,11 @@ function Diagnostico() {
     }
   }
 
-  async function refreshStatus() {
-    setEnv({
-      mode: getNotificationMode(),
-      platform: getPlatform(),
-      native: isNativePlatform(),
-      pluginAvailable: hasCapacitorPlugin("LocalNotifications"),
-    });
-    setPerm(await notificationService.currentPermission());
-    setSnapshot(await getNotificationDiagnosticSnapshot());
-    setNativeStatus(await getNativePluginStatus());
-    setSmokeLog(getSmokeLog());
-  }
-
+  /** Direct native smoke test — bypasses store/legacy, surfaces the real report. */
   async function runNowTest() {
     captureClick("Testar agora");
     try {
-      if (env.native && env.platform === "android") {
+      if (runtime.native) {
         const report = await runNativeNotificationSmokeTest();
         applyReport(report);
       } else {
@@ -213,7 +245,6 @@ function Diagnostico() {
         setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
         setCurrentStage("teste web concluído");
       }
-      await refreshStatus();
     } finally {
       setBusy(false);
     }
@@ -222,7 +253,7 @@ function Diagnostico() {
   async function runScheduledTest(seconds: number) {
     captureClick(`Em ${seconds === 60 ? "1 min" : `${seconds}s`}`);
     try {
-      if (env.native && env.platform === "android") {
+      if (runtime.native) {
         const report = seconds === 60 ? await runNativeTest60s() : await runNativeTest10s();
         applyReport(report);
       } else {
@@ -231,14 +262,22 @@ function Diagnostico() {
         toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
         setCurrentStage(`agendamento web ${seconds}s`);
       }
-      await refreshStatus();
     } finally {
       setBusy(false);
     }
   }
 
+  const selectedMethodLabel = isNative ? "native" : "web";
   const permLabel =
-    perm === "granted" ? "Concedida" : perm === "denied" ? "Negada" : perm === "unsupported" ? "Não suportada" : "Não solicitada";
+    perm === "granted"
+      ? "Concedida"
+      : perm === "denied"
+        ? "Negada"
+        : perm === "unsupported"
+          ? "Não suportada"
+          : perm === NOT_VERIFIED
+            ? NOT_VERIFIED
+            : "Não solicitada";
   const permColor = perm === "granted" ? "var(--primary)" : perm === "denied" ? "var(--danger)" : "var(--warning)";
 
   return (
@@ -248,10 +287,33 @@ function Diagnostico() {
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
 
-      {/* ===== Diagnóstico nativo (native-v6) ===== */}
+      {/* ===== Botão nativo mínimo (HTML puro, sem design system) ===== */}
+      <button
+        type="button"
+        onPointerDown={() => capturePointer("teste-nativo-direto")}
+        onClick={() => void runNowTest()}
+        style={{
+          position: "relative",
+          zIndex: 100,
+          pointerEvents: "auto",
+          touchAction: "manipulation",
+          width: "100%",
+          minHeight: "64px",
+          marginBottom: "12px",
+          borderRadius: "14px",
+          fontWeight: 800,
+          fontSize: "15px",
+          color: "var(--primary-foreground)",
+          background: "var(--primary)",
+        }}
+      >
+        EXECUTAR TESTE NATIVO DIRETO
+      </button>
+
+      {/* ===== Diagnóstico unificado (native-v8-unified) ===== */}
       <Card className="space-y-3" style={{ borderColor: "color-mix(in oklab, var(--primary) 45%, transparent)" }}>
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold">Diagnóstico nativo</span>
+          <span className="text-sm font-bold">Diagnóstico unificado</span>
           <span
             className="rounded-full px-3 py-1 text-xs font-bold"
             style={{ background: "color-mix(in oklab, var(--primary) 18%, transparent)", color: "var(--primary)" }}
@@ -259,32 +321,54 @@ function Diagnostico() {
             {NOTIFICATION_DIAGNOSTIC_VERSION}
           </span>
         </div>
+
         <StatusLine
           icon={<PlayCircle className="h-4 w-4" />}
-          label="Clique capturado"
-          value={clickCount > 0 ? "Sim" : "Nenhum teste nativo executado."}
+          label="pointerDown recebido"
+          value={pointerCount > 0 ? `Sim (${pointerCount})` : NOT_VERIFIED}
+          color={pointerCount > 0 ? "var(--primary)" : "var(--warning)"}
+        />
+        <StatusLine
+          icon={<PlayCircle className="h-4 w-4" />}
+          label="click recebido"
+          value={clickCount > 0 ? `Sim (${clickCount})` : NOT_VERIFIED}
           color={clickCount > 0 ? "var(--primary)" : "var(--warning)"}
         />
-        <StatusLine icon={<Info className="h-4 w-4" />} label="Quantidade de cliques" value={String(clickCount)} />
-        <StatusLine icon={<Info className="h-4 w-4" />} label="Último botão" value={lastButton} />
-        <StatusLine icon={<Clock className="h-4 w-4" />} label="Horário do clique" value={clickedAt ? fmtTime(clickedAt) : "—"} />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="clickCount" value={String(clickCount)} />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="último botão" value={lastButton} />
+        <StatusLine icon={<Clock className="h-4 w-4" />} label="horário do clique" value={clickedAt ? fmtTime(clickedAt) : NOT_VERIFIED} />
+        <StatusLine
+          icon={<Smartphone className="h-4 w-4" />}
+          label="native atual"
+          value={runtime.native ? "true" : "false"}
+          color={runtime.native ? "var(--primary)" : "var(--danger)"}
+        />
+        <StatusLine icon={<Smartphone className="h-4 w-4" />} label="platform atual" value={runtime.platform} color={runtime.platform === "android" ? "var(--primary)" : undefined} />
+        <StatusLine icon={<Bot className="h-4 w-4" />} label="plugin reportado (isPluginAvailable)" value={runtime.pluginReportedAvailable ? "true" : "false"} />
+        <StatusLine
+          icon={<BellRing className="h-4 w-4" />}
+          label="método selecionado"
+          value={selectedMethodLabel}
+          color={selectedMethodLabel === "native" ? "var(--primary)" : "var(--warning)"}
+        />
+        <StatusLine icon={<Bot className="h-4 w-4" />} label="plugin importado" value={triLabel(smoke ? smoke.pluginImported : null)} color={smoke?.pluginImported ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
+        <StatusLine icon={<Bell className="h-4 w-4" />} label="permissionBefore" value={smoke?.permissionBefore ?? NOT_VERIFIED} />
+        <StatusLine icon={<Bell className="h-4 w-4" />} label="permissionRequested" value={smoke?.permissionRequested ?? NOT_VERIFIED} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="permissionAfter" value={smoke?.permissionAfter ?? NOT_VERIFIED} color={smoke?.permissionAfter === "granted" ? "var(--primary)" : smoke?.permissionAfter ? "var(--danger)" : undefined} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="canal criado" value={triLabel(smoke ? smoke.channelCreated : null)} color={smoke?.channelCreated ? "var(--primary)" : undefined} />
+        <StatusLine icon={<Send className="h-4 w-4" />} label="schedule resolvido" value={triLabel(smoke ? smoke.scheduleResolved : null)} color={smoke?.scheduleResolved ? "var(--primary)" : undefined} />
+        <StatusLine icon={<Info className="h-4 w-4" />} label="ID do teste" value={smoke ? String(smoke.notificationId) : NOT_VERIFIED} />
+        <StatusLine icon={<Clock className="h-4 w-4" />} label="scheduledAt" value={smoke?.scheduledAt ? fmtTime(new Date(smoke.scheduledAt).getTime()) : NOT_VERIFIED} />
+        <StatusLine icon={<Inbox className="h-4 w-4" />} label="pending IDs" value={smoke ? (smoke.pendingIds.length ? smoke.pendingIds.join(", ") : "nenhum") : NOT_VERIFIED} />
+        <StatusLine icon={<CheckCircle2 className="h-4 w-4" />} label="foundInPending" value={triLabel(smoke ? smoke.foundInPending : null)} color={smoke?.foundInPending ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
+        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="listener registrado" value={triLabel(nativeStatus ? nativeStatus.listenersRegistered : null)} color={nativeStatus?.listenersRegistered ? "var(--primary)" : undefined} />
+        <StatusLine icon={<AlertTriangle className="h-4 w-4" />} label="último erro" value={smoke?.error ? smoke.error.message : nativeStatus?.lastError ?? "Nenhum"} color={smoke?.error || nativeStatus?.lastError ? "var(--danger)" : undefined} />
         <StatusLine
           icon={<PlayCircle className="h-4 w-4" />}
-          label="Etapa atual"
+          label="etapa atual"
           value={busy ? `⏳ ${currentStage}` : currentStage}
           color={busy ? "var(--warning)" : undefined}
         />
-        <StatusLine icon={<Bot className="h-4 w-4" />} label="plugin importado" value={smoke ? (smoke.pluginImported ? "true" : "false") : "—"} color={smoke?.pluginImported ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
-        <StatusLine icon={<Bell className="h-4 w-4" />} label="permissão antes" value={smoke?.permissionBefore ?? "—"} />
-        <StatusLine icon={<Bell className="h-4 w-4" />} label="requestPermissions" value={smoke?.permissionRequested ?? "—"} />
-        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="permissão depois" value={smoke?.permissionAfter ?? "—"} color={smoke?.permissionAfter === "granted" ? "var(--primary)" : smoke?.permissionAfter ? "var(--danger)" : undefined} />
-        <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="canal criado" value={smoke ? (smoke.channelCreated ? "true" : "false") : "—"} color={smoke?.channelCreated ? "var(--primary)" : undefined} />
-        <StatusLine icon={<Send className="h-4 w-4" />} label="schedule resolvido" value={smoke ? (smoke.scheduleResolved ? "true" : "false") : "—"} color={smoke?.scheduleResolved ? "var(--primary)" : undefined} />
-        <StatusLine icon={<Info className="h-4 w-4" />} label="ID do teste" value={smoke ? String(smoke.notificationId) : "—"} />
-        <StatusLine icon={<Clock className="h-4 w-4" />} label="horário programado" value={smoke?.scheduledAt ? fmtTime(new Date(smoke.scheduledAt).getTime()) : "—"} />
-        <StatusLine icon={<Inbox className="h-4 w-4" />} label="IDs pendentes" value={smoke ? (smoke.pendingIds.length ? smoke.pendingIds.join(", ") : "nenhum") : "—"} />
-        <StatusLine icon={<CheckCircle2 className="h-4 w-4" />} label="ID encontrado nos pendentes" value={smoke ? (smoke.foundInPending ? "Sim" : "Não") : "—"} color={smoke?.foundInPending ? "var(--primary)" : smoke ? "var(--danger)" : undefined} />
-        <StatusLine icon={<AlertTriangle className="h-4 w-4" />} label="último erro" value={smoke?.error ? smoke.error.message : "Nenhum"} color={smoke?.error ? "var(--danger)" : undefined} />
       </Card>
 
       {/* Smoke-test log */}
@@ -310,77 +394,31 @@ function Diagnostico() {
         </Card>
       )}
 
-
       {/* Ambiente atual */}
-      <Card className="space-y-3">
+      <Card className="mt-3 space-y-3">
         <StatusLine
           icon={isNative ? <Smartphone className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
           label="Ambiente atual"
           value={envLabel}
           color="var(--primary)"
         />
-        <StatusLine
-          icon={<Bot className="h-4 w-4" />}
-          label="Método usado"
-          value={methodLabel}
-        />
+        <StatusLine icon={<Bot className="h-4 w-4" />} label="Método usado" value={methodLabel} />
         <StatusLine icon={<Bell className="h-4 w-4" />} label="Permissão atual" value={permLabel} color={permColor} />
       </Card>
 
-      <Card className="mt-3 space-y-3">
-        <StatusLine
-          icon={<Smartphone className="h-4 w-4" />}
-          label="Capacitor.isNativePlatform()"
-          value={env.native ? "true" : "false"}
-          color={env.native ? "var(--primary)" : "var(--danger)"}
-        />
-        <StatusLine
-          icon={<Smartphone className="h-4 w-4" />}
-          label="Capacitor.getPlatform()"
-          value={env.platform}
-          color={env.platform === "android" ? "var(--primary)" : env.platform === "ios" ? "var(--warning)" : undefined}
-        />
-        <StatusLine
-          icon={<Bot className="h-4 w-4" />}
-          label='Capacitor.isPluginAvailable("LocalNotifications")'
-          value={env.pluginAvailable ? "true" : "false"}
-          color={env.pluginAvailable ? "var(--primary)" : "var(--danger)"}
-        />
-        <StatusLine
-          icon={<BellRing className="h-4 w-4" />}
-          label="Método selecionado"
-          value={nativeStatus?.selectedMethod === "native" ? "native" : "web"}
-          color={nativeStatus?.selectedMethod === "native" ? "var(--primary)" : "var(--warning)"}
-        />
-        <StatusLine
-          icon={<Bot className="h-4 w-4" />}
-          label="plugin importado"
-          value={nativeStatus?.pluginImported ? "true" : "false"}
-          color={nativeStatus?.pluginImported ? "var(--primary)" : "var(--warning)"}
-        />
-      </Card>
-
-      {/* Detalhes nativos (APK Android) */}
-      {env.native && env.platform === "android" && (
+      {/* Detalhes nativos (APK) */}
+      {isNative && (
         <Card className="mt-3 space-y-3">
           <StatusLine
             icon={<Smartphone className="h-4 w-4" />}
-            label="Plugin nativo disponível"
-            value={nativeStatus?.pluginAvailable ? "Sim" : "Não"}
-            color={nativeStatus?.pluginAvailable ? "var(--primary)" : "var(--danger)"}
+            label="Plugin importado"
+            value={triLabel(nativeStatus ? nativeStatus.pluginImported : null)}
+            color={nativeStatus?.pluginImported ? "var(--primary)" : nativeStatus ? "var(--danger)" : undefined}
           />
           <StatusLine
             icon={<ShieldCheck className="h-4 w-4" />}
-            label="Permissão Android"
-            value={
-              nativeStatus?.permission === "granted"
-                ? "granted"
-                : nativeStatus?.permission === "denied"
-                  ? "denied"
-                  : nativeStatus?.permission === "default"
-                    ? "prompt"
-                    : "—"
-            }
+            label="Permissão (nativa)"
+            value={nativeStatus ? nativeStatus.permission : NOT_VERIFIED}
             color={
               nativeStatus?.permission === "granted"
                 ? "var(--primary)"
@@ -392,30 +430,16 @@ function Diagnostico() {
           <StatusLine
             icon={<ShieldCheck className="h-4 w-4" />}
             label="Canal Android criado"
-            value={nativeStatus?.channelCreated ? "Sim" : "Não"}
+            value={triLabel(nativeStatus ? nativeStatus.channelCreated : null)}
             color={nativeStatus?.channelCreated ? "var(--primary)" : "var(--warning)"}
           />
           <StatusLine
             icon={<Bot className="h-4 w-4" />}
             label="Listeners registrados"
-            value={nativeStatus?.listenersRegistered ? "Sim" : "Não"}
+            value={triLabel(nativeStatus ? nativeStatus.listenersRegistered : null)}
             color={nativeStatus?.listenersRegistered ? "var(--primary)" : "var(--warning)"}
           />
-          <StatusLine
-            icon={<Clock className="h-4 w-4" />}
-            label="Pendentes (nativo)"
-            value={String(nativeStatus?.pendingCount ?? 0)}
-          />
-          <StatusLine
-            icon={<Info className="h-4 w-4" />}
-            label="checkPermissions()"
-            value={nativeStatus?.checkRaw || "—"}
-          />
-          <StatusLine
-            icon={<Info className="h-4 w-4" />}
-            label="requestPermissions()"
-            value={nativeStatus?.requestRaw || "—"}
-          />
+          <StatusLine icon={<Clock className="h-4 w-4" />} label="Pendentes (nativo)" value={nativeStatus ? String(nativeStatus.pendingCount) : NOT_VERIFIED} />
           <StatusLine
             icon={<AlertTriangle className="h-4 w-4" />}
             label="Último erro real"
@@ -430,21 +454,21 @@ function Diagnostico() {
         <Card className="mt-3 flex items-start gap-2" style={{ borderColor: "color-mix(in oklab, var(--cat-estudos) 40%, transparent)" }}>
           <Info className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--cat-estudos)" }} />
           <p className="text-xs text-muted-foreground">
-            Notificações nativas só estarão disponíveis no APK. No navegador, serão usadas notificações web quando
-            suportadas pelo dispositivo.
+            Notificações nativas só estarão disponíveis no APK. No navegador, o fallback web (Service Worker) só dispara
+            enquanto a página permanece aberta — não é agendamento persistente como no nativo.
           </p>
         </Card>
       )}
 
-      {/* Detalhes técnicos (relevantes no navegador) */}
+      {/* Detalhes técnicos (navegador) */}
       {!isNative && (
         <Card className="mt-3 space-y-3">
-          <StatusLine icon={<BellRing className="h-4 w-4" />} label="Notification API" value={snapshot?.notificationApiAvailable ? "Sim" : "Não"} color={snapshot?.notificationApiAvailable ? "var(--primary)" : "var(--warning)"} />
-          <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="Service Worker" value={snapshot?.serviceWorkerRegistered ? `Sim · ${snapshot.serviceWorkerState}` : "Não registrado"} color={snapshot?.serviceWorkerRegistered ? "var(--primary)" : "var(--warning)"} />
-          <StatusLine icon={<Bot className="h-4 w-4" />} label="Push Manager" value={snapshot?.pushManagerAvailable ? "Disponível" : "Indisponível"} color={snapshot?.pushManagerAvailable ? "var(--primary)" : "var(--warning)"} />
-          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Status da PWA" value={snapshot?.pwaStatus === "standalone" ? "Instalada / standalone" : "Navegador"} color={snapshot?.pwaStatus === "standalone" ? "var(--primary)" : "var(--warning)"} />
-          <StatusLine icon={<Globe className="h-4 w-4" />} label="Navegador" value={snapshot?.browser ?? "—"} />
-          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Sistema" value={snapshot?.os ?? "—"} />
+          <StatusLine icon={<BellRing className="h-4 w-4" />} label="Notification API" value={triLabel(snapshot ? snapshot.notificationApiAvailable : null)} color={snapshot?.notificationApiAvailable ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<ShieldCheck className="h-4 w-4" />} label="Service Worker" value={snapshot ? (snapshot.serviceWorkerRegistered ? `Sim · ${snapshot.serviceWorkerState}` : "Não registrado") : NOT_VERIFIED} color={snapshot?.serviceWorkerRegistered ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Bot className="h-4 w-4" />} label="Push Manager" value={snapshot ? (snapshot.pushManagerAvailable ? "Disponível" : "Indisponível") : NOT_VERIFIED} color={snapshot?.pushManagerAvailable ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Status da PWA" value={snapshot ? (snapshot.pwaStatus === "standalone" ? "Instalada / standalone" : "Navegador") : NOT_VERIFIED} color={snapshot?.pwaStatus === "standalone" ? "var(--primary)" : "var(--warning)"} />
+          <StatusLine icon={<Globe className="h-4 w-4" />} label="Navegador" value={snapshot?.browser ?? NOT_VERIFIED} />
+          <StatusLine icon={<Smartphone className="h-4 w-4" />} label="Sistema" value={snapshot?.os ?? NOT_VERIFIED} />
         </Card>
       )}
 
@@ -462,25 +486,37 @@ function Diagnostico() {
           </span>
         </div>
         {perm !== "granted" && perm !== "unsupported" && (
-          <button onClick={ask} className="no-tap mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground">
+          <button
+            type="button"
+            onPointerDown={() => capturePointer("permitir")}
+            onClick={() => void ask()}
+            disabled={busy}
+            className="no-tap mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"
+          >
             {isNative ? "Permitir notificações (POST_NOTIFICATIONS)" : "Permitir notificações"}
           </button>
         )}
         {perm === "denied" && (
           <p className="mt-2 text-xs text-muted-foreground">
             {isNative
-              ? "Bloqueadas pelo sistema. Ative nas configurações do app Android."
+              ? "Bloqueadas pelo sistema. Ative nas configurações do app."
               : "Bloqueadas pelo navegador. Abra as permissões do site e ative as notificações manualmente."}
           </p>
         )}
         {perm === "unsupported" && (
           <p className="mt-2 text-xs text-muted-foreground">
             {isNative
-              ? "O plugin de notificações nativas não está disponível neste build."
+              ? "O plugin de notificações nativas não respondeu. Veja o último erro acima."
               : "Este navegador não suporta notificações web. Tudo bem — o app continua funcionando normalmente."}
           </p>
         )}
-        <button onClick={refreshStatus} className="no-tap mt-3 w-full rounded-xl border border-border py-2.5 text-sm font-bold">
+        <button
+          type="button"
+          onPointerDown={() => capturePointer("atualizar")}
+          onClick={() => void refreshStatus()}
+          disabled={busy}
+          className="no-tap mt-3 w-full rounded-xl border border-border py-2.5 text-sm font-bold disabled:opacity-60"
+        >
           Atualizar diagnóstico
         </button>
       </Card>
@@ -498,14 +534,18 @@ function Diagnostico() {
       <SectionLabel>Testes</SectionLabel>
       <div className="grid grid-cols-1 gap-2">
         <button
+          type="button"
+          onPointerDown={() => capturePointer("testar-agora")}
           onClick={() => void runNowTest()}
           disabled={busy}
           className="no-tap flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-60"
         >
-          <BellRing className="h-4 w-4" /> Testar agora ({env.native && env.platform === "android" ? "smoke nativo · ID 10001" : "web"})
+          <BellRing className="h-4 w-4" /> Testar agora ({isNative ? "smoke nativo · ID 10001" : "web"})
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
+            type="button"
+            onPointerDown={() => capturePointer("em-10s")}
             onClick={() => void runScheduledTest(10)}
             disabled={busy}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-60"
@@ -513,6 +553,8 @@ function Diagnostico() {
             <Clock className="h-4 w-4" /> Em 10s
           </button>
           <button
+            type="button"
+            onPointerDown={() => capturePointer("em-60s")}
             onClick={() => void runScheduledTest(60)}
             disabled={busy}
             className="no-tap flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-60"
@@ -537,7 +579,7 @@ function Diagnostico() {
                   <p className="truncate text-sm font-semibold">{s.title}</p>
                   <p className="text-xs text-muted-foreground">dispara em {left}s</p>
                 </div>
-                <button onClick={() => cancelScheduled(s.id)} className="no-tap shrink-0 p-1 text-muted-foreground">
+                <button type="button" onClick={() => cancelScheduled(s.id)} className="no-tap shrink-0 p-1 text-muted-foreground">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </Card>
@@ -550,7 +592,7 @@ function Diagnostico() {
       <div className="mb-2 mt-6 flex items-center justify-between px-1">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Registro detalhado</h2>
         {notifLog.length > 0 && (
-          <button onClick={clearNotifLog} className="no-tap text-xs text-muted-foreground underline">
+          <button type="button" onClick={clearNotifLog} className="no-tap text-xs text-muted-foreground underline">
             Limpar
           </button>
         )}
@@ -579,26 +621,6 @@ function Diagnostico() {
         </Card>
       )}
 
-      <Card className="mt-4" style={{ borderColor: "color-mix(in oklab, var(--primary) 40%, transparent)" }}>
-        <div className="flex items-start gap-2">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--primary)" }} />
-          <p className="text-xs text-muted-foreground">
-            {isNative ? (
-              <>
-                Você está no <strong>APK Android</strong>: o app usa <strong>Capacitor Local Notifications</strong> com
-                permissão <strong>POST_NOTIFICATIONS</strong> e agendamento nativo (AlarmManager).
-              </>
-            ) : (
-              <>
-                Você está no <strong>navegador/PWA</strong>: o app usa <strong>Web Notifications</strong> via Service
-                Worker quando suportadas. As notificações nativas só ficam disponíveis no APK — isso é esperado e{" "}
-                <strong>não é um erro</strong>.
-              </>
-            )}
-          </p>
-        </div>
-      </Card>
-
       <div className="h-6" />
     </main>
   );
@@ -624,7 +646,7 @@ function StatusLine({ icon, label, value, color }: { icon: React.ReactNode; labe
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background" style={color ? { color } : undefined}>{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-sm font-semibold" style={color ? { color } : undefined}>{value}</p>
+        <p className="break-words text-sm font-semibold" style={color ? { color } : undefined}>{value}</p>
       </div>
     </div>
   );
