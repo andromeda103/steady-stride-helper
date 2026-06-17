@@ -237,8 +237,19 @@ function Diagnostico() {
 
   /** Direct native smoke test — bypasses store/legacy, surfaces the real report. */
   async function runNowTest() {
+    if (runningRef.current) {
+      console.warn("[notification-test] Já existe um teste em execução.");
+      return;
+    }
+    runningRef.current = true;
     captureClick("Testar agora");
     try {
+      // ALL early returns happen inside the try so finally always releases locks.
+      if (typeof window === "undefined" || import.meta.env.SSR) {
+        setCurrentStage("server-environment-blocked");
+        setTestResult("Bloqueado: SSR/prerenderização não executa o plugin nativo.");
+        return;
+      }
       if (runtime.native) {
         const report = await runNativeNotificationSmokeTest();
         applyReport(report);
@@ -247,14 +258,31 @@ function Diagnostico() {
         setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
         setCurrentStage("teste web concluído");
       }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setCurrentStage("error");
+      setTestResult(`❌ ${msg}`);
+      console.error("[notification-test] Erro no handler:", error);
     } finally {
+      runningRef.current = false;
       setBusy(false);
+      console.log("[notification-test] Travas de execução liberadas.");
     }
   }
 
   async function runScheduledTest(seconds: number) {
+    if (runningRef.current) {
+      console.warn("[notification-test] Já existe um teste em execução.");
+      return;
+    }
+    runningRef.current = true;
     captureClick(`Em ${seconds === 60 ? "1 min" : `${seconds}s`}`);
     try {
+      if (typeof window === "undefined" || import.meta.env.SSR) {
+        setCurrentStage("server-environment-blocked");
+        setTestResult("Bloqueado: SSR/prerenderização não executa o plugin nativo.");
+        return;
+      }
       if (runtime.native) {
         const report = seconds === 60 ? await runNativeTest60s() : await runNativeTest10s();
         applyReport(report);
@@ -264,8 +292,15 @@ function Diagnostico() {
         toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
         setCurrentStage(`agendamento web ${seconds}s`);
       }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setCurrentStage("error");
+      setTestResult(`❌ ${msg}`);
+      console.error("[notification-test] Erro no handler:", error);
     } finally {
+      runningRef.current = false;
       setBusy(false);
+      console.log("[notification-test] Travas de execução liberadas.");
     }
   }
 
