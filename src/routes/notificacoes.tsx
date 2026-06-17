@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -31,6 +31,7 @@ import {
 } from "@/lib/notification-service";
 import {
   NOTIFICATION_DIAGNOSTIC_VERSION,
+  NOTIFICATION_DIAGNOSTIC_BUILD,
   runNativeNotificationSmokeTest,
   runNativeTest10s,
   runNativeTest60s,
@@ -93,6 +94,7 @@ function Diagnostico() {
   const [clickedAt, setClickedAt] = useState<number | null>(null);
   const [currentStage, setCurrentStage] = useState<string>("idle");
   const [busy, setBusy] = useState(false);
+  const runningRef = useRef(false);
   const [, setTick] = useState(0);
 
   /** Pointer reached the element (proves the touch was not swallowed). */
@@ -235,8 +237,19 @@ function Diagnostico() {
 
   /** Direct native smoke test — bypasses store/legacy, surfaces the real report. */
   async function runNowTest() {
+    if (runningRef.current) {
+      console.warn("[notification-test] Já existe um teste em execução.");
+      return;
+    }
+    runningRef.current = true;
     captureClick("Testar agora");
     try {
+      // ALL early returns happen inside the try so finally always releases locks.
+      if (typeof window === "undefined" || import.meta.env.SSR) {
+        setCurrentStage("server-environment-blocked");
+        setTestResult("Bloqueado: SSR/prerenderização não executa o plugin nativo.");
+        return;
+      }
       if (runtime.native) {
         const report = await runNativeNotificationSmokeTest();
         applyReport(report);
@@ -245,14 +258,31 @@ function Diagnostico() {
         setTestResult(result.ok ? result.message : `${result.message}${result.detail ? ` — ${result.detail}` : ""}`);
         setCurrentStage("teste web concluído");
       }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setCurrentStage("error");
+      setTestResult(`❌ ${msg}`);
+      console.error("[notification-test] Erro no handler:", error);
     } finally {
+      runningRef.current = false;
       setBusy(false);
+      console.log("[notification-test] Travas de execução liberadas.");
     }
   }
 
   async function runScheduledTest(seconds: number) {
+    if (runningRef.current) {
+      console.warn("[notification-test] Já existe um teste em execução.");
+      return;
+    }
+    runningRef.current = true;
     captureClick(`Em ${seconds === 60 ? "1 min" : `${seconds}s`}`);
     try {
+      if (typeof window === "undefined" || import.meta.env.SSR) {
+        setCurrentStage("server-environment-blocked");
+        setTestResult("Bloqueado: SSR/prerenderização não executa o plugin nativo.");
+        return;
+      }
       if (runtime.native) {
         const report = seconds === 60 ? await runNativeTest60s() : await runNativeTest10s();
         applyReport(report);
@@ -262,8 +292,15 @@ function Diagnostico() {
         toast(`Agendada para ${seconds}s`, { description: "Teste real criado." });
         setCurrentStage(`agendamento web ${seconds}s`);
       }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setCurrentStage("error");
+      setTestResult(`❌ ${msg}`);
+      console.error("[notification-test] Erro no handler:", error);
     } finally {
+      runningRef.current = false;
       setBusy(false);
+      console.log("[notification-test] Travas de execução liberadas.");
     }
   }
 
@@ -286,6 +323,26 @@ function Diagnostico() {
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
+
+      {/* ===== Identificação ESTÁTICA da versão empacotada (sempre visível) ===== */}
+      <div
+        className="mb-3 rounded-xl border p-3"
+        style={{
+          borderColor: "color-mix(in oklab, var(--primary) 45%, transparent)",
+          background: "color-mix(in oklab, var(--primary) 10%, transparent)",
+        }}
+      >
+        <p className="text-sm font-extrabold" style={{ color: "var(--primary)" }}>
+          BUILD: {NOTIFICATION_DIAGNOSTIC_VERSION}
+        </p>
+        <p className="text-xs text-muted-foreground">Código gerado em: {NOTIFICATION_DIAGNOSTIC_BUILD}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Antes de testar, confirme que o topo mostra <b>BUILD: {NOTIFICATION_DIAGNOSTIC_VERSION}</b>. Se uma versão
+          anterior aparecer, o APK instalado está desatualizado.
+        </p>
+      </div>
+
+
 
       {/* ===== Botão nativo mínimo (HTML puro, sem design system) ===== */}
       <button

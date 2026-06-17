@@ -25,8 +25,15 @@
 // ============================================================================
 
 import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
-export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v8-unified";
+// ----------------------------------------------------------------------------
+// STATIC, ALWAYS-VISIBLE build identification (bundled into the APK).
+// These constants are literals — never computed with new Date() at runtime —
+// so the value stays glued to the exact code shipped in the build.
+// ----------------------------------------------------------------------------
+export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v10-immediate";
+export const NOTIFICATION_DIAGNOSTIC_BUILD = "2026-06-17 14:30 BRT";
 
 const LOG_PREFIX = "[LEVELUP-NOTIFY]";
 const TEST_CHANNEL_ID = "levelup_native_test";
@@ -182,14 +189,19 @@ export function readEnvDiagnostics(): EnvDiagnostics {
 // Plugin import — attempted DIRECTLY (not gated by isPluginAvailable).
 // ----------------------------------------------------------------------------
 
+/** SSR / prerender guard — true means it is NOT safe to touch the plugin. */
+export function isServerEnvironment(): boolean {
+  return typeof window === "undefined" || Boolean(import.meta.env?.SSR);
+}
+
 async function importPlugin(): Promise<LocalNotificationsPlugin> {
-  pushLog("plugin-import", true, "Importando @capacitor/local-notifications...");
-  const mod = await withTimeout(import("@capacitor/local-notifications"), TIMEOUT_MS, "plugin-import");
-  const plugin = (mod as { LocalNotifications?: unknown }).LocalNotifications as LocalNotificationsPlugin | undefined;
+  // The static import is bundled; we just confirm the export is present.
+  // No native method is ever called at module scope — only here, on demand.
+  const plugin = LocalNotifications as unknown as LocalNotificationsPlugin | undefined;
   if (!plugin) {
-    throw new Error("Módulo carregado, mas LocalNotifications está ausente no export.");
+    throw new Error("LocalNotifications está ausente no export do plugin.");
   }
-  pushLog("plugin-import", true, "Plugin importado com sucesso.");
+  pushLog("plugin-import", true, "Plugin LocalNotifications disponível (import estático).");
   return plugin;
 }
 
@@ -277,6 +289,16 @@ export async function requestNativePermission(): Promise<PermissionFlowResult> {
   };
   pushLog("permission-flow", true, "Início do fluxo de permissão", env);
 
+  if (isServerEnvironment()) {
+    result.error = serializeError(
+      new Error("Permissão nativa bloqueada no ambiente SSR / prerenderização."),
+      "server-environment-blocked",
+    );
+    pushLog("server-environment-blocked", false, result.error.message);
+    return result;
+  }
+
+
   if (!env.native || env.platform !== "android") {
     result.error = serializeError(
       new Error("Ambiente não-nativo: permissão nativa só existe no APK Android."),
@@ -316,7 +338,10 @@ export async function requestNativePermission(): Promise<PermissionFlowResult> {
 
 export interface SmokeReport {
   version: string;
+  diagnosticVersion: string;
+  diagnosticBuild: string;
   clickCaptured: true;
+  serverBlocked: boolean;
   native: boolean;
   platform: string;
   pluginReportedAvailable: boolean;
@@ -338,7 +363,10 @@ async function runCoreSmoke(notificationId: number, delayMs: number): Promise<Sm
   const env = readEnvDiagnostics();
   const report: SmokeReport = {
     version: NOTIFICATION_DIAGNOSTIC_VERSION,
+    diagnosticVersion: NOTIFICATION_DIAGNOSTIC_VERSION,
+    diagnosticBuild: NOTIFICATION_DIAGNOSTIC_BUILD,
     clickCaptured: true,
+    serverBlocked: false,
     native: env.native,
     platform: env.platform,
     pluginReportedAvailable: env.pluginReportedAvailable,
@@ -355,6 +383,19 @@ async function runCoreSmoke(notificationId: number, delayMs: number): Promise<Sm
     error: null,
     log: [],
   };
+
+  // SSR / prerender guard — never touch the plugin off the device WebView.
+  if (isServerEnvironment()) {
+    report.serverBlocked = true;
+    report.error = serializeError(
+      new Error("Execução do plugin bloqueada no ambiente SSR / prerenderização."),
+      "server-environment-blocked",
+    );
+    pushLog("server-environment-blocked", false, report.error.message);
+    report.log = getSmokeLog();
+    return report;
+  }
+
 
   pushLog("click", true, `Smoke test iniciado (id=${notificationId}, +${Math.round(delayMs / 1000)}s)`, env);
   pushLog("platform", true, `native=${env.native} platform=${env.platform} pluginAvailable=${env.pluginReportedAvailable}`);
