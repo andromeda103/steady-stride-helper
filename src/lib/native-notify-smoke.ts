@@ -25,8 +25,15 @@
 // ============================================================================
 
 import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
-export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v8-unified";
+// ----------------------------------------------------------------------------
+// STATIC, ALWAYS-VISIBLE build identification (bundled into the APK).
+// These constants are literals — never computed with new Date() at runtime —
+// so the value stays glued to the exact code shipped in the build.
+// ----------------------------------------------------------------------------
+export const NOTIFICATION_DIAGNOSTIC_VERSION = "native-v10-immediate";
+export const NOTIFICATION_DIAGNOSTIC_BUILD = "2026-06-17 14:30 BRT";
 
 const LOG_PREFIX = "[LEVELUP-NOTIFY]";
 const TEST_CHANNEL_ID = "levelup_native_test";
