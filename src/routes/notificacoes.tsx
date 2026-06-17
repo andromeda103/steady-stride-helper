@@ -94,6 +94,7 @@ function Diagnostico() {
   const [clickedAt, setClickedAt] = useState<number | null>(null);
   const [currentStage, setCurrentStage] = useState<string>("idle");
   const [busy, setBusy] = useState(false);
+  const runningRef = useRef(false);
   const [, setTick] = useState(0);
 
   /** Pointer reached the element (proves the touch was not swallowed). */
