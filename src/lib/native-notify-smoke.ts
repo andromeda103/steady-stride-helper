@@ -189,14 +189,19 @@ export function readEnvDiagnostics(): EnvDiagnostics {
 // Plugin import — attempted DIRECTLY (not gated by isPluginAvailable).
 // ----------------------------------------------------------------------------
 
+/** SSR / prerender guard — true means it is NOT safe to touch the plugin. */
+export function isServerEnvironment(): boolean {
+  return typeof window === "undefined" || Boolean(import.meta.env?.SSR);
+}
+
 async function importPlugin(): Promise<LocalNotificationsPlugin> {
-  pushLog("plugin-import", true, "Importando @capacitor/local-notifications...");
-  const mod = await withTimeout(import("@capacitor/local-notifications"), TIMEOUT_MS, "plugin-import");
-  const plugin = (mod as { LocalNotifications?: unknown }).LocalNotifications as LocalNotificationsPlugin | undefined;
+  // The static import is bundled; we just confirm the export is present.
+  // No native method is ever called at module scope — only here, on demand.
+  const plugin = LocalNotifications as unknown as LocalNotificationsPlugin | undefined;
   if (!plugin) {
-    throw new Error("Módulo carregado, mas LocalNotifications está ausente no export.");
+    throw new Error("LocalNotifications está ausente no export do plugin.");
   }
-  pushLog("plugin-import", true, "Plugin importado com sucesso.");
+  pushLog("plugin-import", true, "Plugin LocalNotifications disponível (import estático).");
   return plugin;
 }
 
