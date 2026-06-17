@@ -328,7 +328,10 @@ export async function requestNativePermission(): Promise<PermissionFlowResult> {
 
 export interface SmokeReport {
   version: string;
+  diagnosticVersion: string;
+  diagnosticBuild: string;
   clickCaptured: true;
+  serverBlocked: boolean;
   native: boolean;
   platform: string;
   pluginReportedAvailable: boolean;
@@ -350,7 +353,10 @@ async function runCoreSmoke(notificationId: number, delayMs: number): Promise<Sm
   const env = readEnvDiagnostics();
   const report: SmokeReport = {
     version: NOTIFICATION_DIAGNOSTIC_VERSION,
+    diagnosticVersion: NOTIFICATION_DIAGNOSTIC_VERSION,
+    diagnosticBuild: NOTIFICATION_DIAGNOSTIC_BUILD,
     clickCaptured: true,
+    serverBlocked: false,
     native: env.native,
     platform: env.platform,
     pluginReportedAvailable: env.pluginReportedAvailable,
@@ -367,6 +373,19 @@ async function runCoreSmoke(notificationId: number, delayMs: number): Promise<Sm
     error: null,
     log: [],
   };
+
+  // SSR / prerender guard — never touch the plugin off the device WebView.
+  if (isServerEnvironment()) {
+    report.serverBlocked = true;
+    report.error = serializeError(
+      new Error("Execução do plugin bloqueada no ambiente SSR / prerenderização."),
+      "server-environment-blocked",
+    );
+    pushLog("server-environment-blocked", false, report.error.message);
+    report.log = getSmokeLog();
+    return report;
+  }
+
 
   pushLog("click", true, `Smoke test iniciado (id=${notificationId}, +${Math.round(delayMs / 1000)}s)`, env);
   pushLog("platform", true, `native=${env.native} platform=${env.platform} pluginAvailable=${env.pluginReportedAvailable}`);
