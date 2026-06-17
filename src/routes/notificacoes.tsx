@@ -288,6 +288,26 @@ function Diagnostico() {
       </Link>
       <PageTitle title="Diagnóstico de notificações" subtitle="Status, testes e registros detalhados." />
 
+      {/* ===== Identificação ESTÁTICA da versão empacotada (sempre visível) ===== */}
+      <div
+        className="mb-3 rounded-xl border p-3"
+        style={{
+          borderColor: "color-mix(in oklab, var(--primary) 45%, transparent)",
+          background: "color-mix(in oklab, var(--primary) 10%, transparent)",
+        }}
+      >
+        <p className="text-sm font-extrabold" style={{ color: "var(--primary)" }}>
+          BUILD: {NOTIFICATION_DIAGNOSTIC_VERSION}
+        </p>
+        <p className="text-xs text-muted-foreground">Código gerado em: {NOTIFICATION_DIAGNOSTIC_BUILD}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Antes de testar, confirme que o topo mostra <b>BUILD: {NOTIFICATION_DIAGNOSTIC_VERSION}</b>. Se uma versão
+          anterior aparecer, o APK instalado está desatualizado.
+        </p>
+      </div>
+
+
+
       {/* ===== Botão nativo mínimo (HTML puro, sem design system) ===== */}
       <button
         type="button"
