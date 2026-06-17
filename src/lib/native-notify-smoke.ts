@@ -289,6 +289,16 @@ export async function requestNativePermission(): Promise<PermissionFlowResult> {
   };
   pushLog("permission-flow", true, "Início do fluxo de permissão", env);
 
+  if (isServerEnvironment()) {
+    result.error = serializeError(
+      new Error("Permissão nativa bloqueada no ambiente SSR / prerenderização."),
+      "server-environment-blocked",
+    );
+    pushLog("server-environment-blocked", false, result.error.message);
+    return result;
+  }
+
+
   if (!env.native || env.platform !== "android") {
     result.error = serializeError(
       new Error("Ambiente não-nativo: permissão nativa só existe no APK Android."),
