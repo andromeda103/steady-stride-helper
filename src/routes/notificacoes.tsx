@@ -31,6 +31,7 @@ import {
 } from "@/lib/notification-service";
 import {
   NOTIFICATION_DIAGNOSTIC_VERSION,
+  NOTIFICATION_DIAGNOSTIC_BUILD,
   runNativeNotificationSmokeTest,
   runNativeTest10s,
   runNativeTest60s,
