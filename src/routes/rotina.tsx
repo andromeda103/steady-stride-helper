@@ -215,6 +215,131 @@ function Chip({ active, color, onClick, children }: { active: boolean; color: st
   );
 }
 
+const BEFORE_OPTIONS: { value: TaskReminderSettings["beforeMinutes"]; label: string }[] = [
+  { value: 0, label: "Não avisar" },
+  { value: 5, label: "5 min" },
+  { value: 10, label: "10 min" },
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 hora" },
+];
+
+/** Controlled editor for a task's native reminder settings. */
+function ReminderEditor({
+  value,
+  hasTime,
+  onChange,
+}: {
+  value: TaskReminderSettings;
+  hasTime: boolean;
+  onChange: (patch: Partial<TaskReminderSettings>) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background/40 p-3">
+      <label className="flex items-center justify-between text-sm font-semibold">
+        <span className="flex items-center gap-2">
+          {value.enabled ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
+          Ativar lembrete
+        </span>
+        <input
+          type="checkbox"
+          checked={value.enabled}
+          onChange={(e) => onChange({ enabled: e.target.checked })}
+          className="h-4 w-4 accent-[var(--primary)]"
+        />
+      </label>
+
+      {!hasTime && (
+        <p className="text-xs text-muted-foreground">Adicione um horário para ativar lembretes.</p>
+      )}
+
+      {value.enabled && hasTime && (
+        <>
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Avisar antes</p>
+            <div className="flex flex-wrap gap-1.5">
+              {BEFORE_OPTIONS.map((o) => (
+                <Chip
+                  key={o.value}
+                  active={value.beforeMinutes === o.value}
+                  color="var(--primary)"
+                  onClick={() => onChange({ beforeMinutes: o.value })}
+                >
+                  {o.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.notifyAtTime}
+              onChange={(e) => onChange({ notifyAtTime: e.target.checked })}
+              className="h-4 w-4 accent-[var(--primary)]"
+            />
+            Avisar no horário
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.repeatIfPending}
+              onChange={(e) => onChange({ repeatIfPending: e.target.checked })}
+              className="h-4 w-4 accent-[var(--primary)]"
+            />
+            Continuar lembrando se estiver pendente
+          </label>
+
+          {value.repeatIfPending && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div>
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Intervalo</p>
+                <div className="flex gap-1.5">
+                  {([5, 10] as const).map((iv) => (
+                    <Chip
+                      key={iv}
+                      active={value.repeatIntervalMinutes === iv}
+                      color="var(--primary)"
+                      onClick={() => onChange({ repeatIntervalMinutes: iv })}
+                    >
+                      {iv} min
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">Máx. repetições</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={48}
+                  value={value.maxRepeatCount}
+                  onChange={(e) => onChange({ maxRepeatCount: Math.max(1, Math.min(48, Number(e.target.value) || 1)) })}
+                  className="w-20 rounded-xl border border-input bg-background px-3 py-2 text-center text-sm outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">Parar após (min)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={value.stopAfterMinutes ?? 0}
+                  onChange={(e) => onChange({ stopAfterMinutes: Math.max(0, Math.min(1440, Number(e.target.value) || 0)) })}
+                  className="w-20 rounded-xl border border-input bg-background px-3 py-2 text-center text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+
 const EMOJI_OPTIONS = ["🦷", "💧", "💊", "📚", "🍅", "✍️", "🏋️", "🥩", "🧘", "🚶", "🌙", "☀️", "❤️", "🔁", "🧠", "🛏️", "🚭", "🙏", "✅"];
 
 function HabitsTab() {
