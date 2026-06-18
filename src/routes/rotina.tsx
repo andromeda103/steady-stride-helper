@@ -66,8 +66,6 @@ function Rotina() {
 
 function TasksTab() {
   const tasks = useStore((s) => s.tasks);
-  const toggleTask = useStore((s) => s.toggleTask);
-  const deleteTask = useStore((s) => s.deleteTask);
   const addTask = useStore((s) => s.addTask);
   const [open, setOpen] = useState(false);
 
@@ -81,34 +79,69 @@ function TasksTab() {
       >
         <Plus className="h-4 w-4" /> Nova tarefa
       </button>
-      {sorted.map((t) => {
-        const ok = isDoneToday(t.lastDone);
-        return (
-          <Card key={t.id} className="flex items-center gap-3 p-3">
-            <button
-              onClick={() => toggleTask(t.id)}
-              className="no-tap flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
-              style={ok ? { background: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
-            >
-              {ok && <Check className="h-4 w-4 text-primary-foreground" strokeWidth={3} />}
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className={`truncate text-sm font-semibold ${ok ? "text-muted-foreground line-through" : ""}`}>{t.name}</p>
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Dot color={CATEGORY_VAR[t.category]} /> {t.category} · {t.time || "qualquer hora"}
-                <span style={{ color: PRIORITY_COLOR[t.priority] }}>· {t.priority}</span>
-              </p>
-            </div>
-            <button onClick={() => deleteTask(t.id)} className="no-tap p-1 text-muted-foreground">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </Card>
-        );
-      })}
+      {sorted.map((t) => (
+        <TaskCard key={t.id} id={t.id} />
+      ))}
       {open && <AddTaskSheet onClose={() => setOpen(false)} onAdd={addTask} />}
     </div>
   );
 }
+
+function TaskCard({ id }: { id: string }) {
+  const task = useStore((s) => s.tasks.find((t) => t.id === id));
+  const toggleTask = useStore((s) => s.toggleTask);
+  const deleteTask = useStore((s) => s.deleteTask);
+  const setTaskReminder = useStore((s) => s.setTaskReminder);
+  const [editing, setEditing] = useState(false);
+  if (!task) return null;
+
+  const ok = isDoneToday(task.lastDone);
+  const reminder = { ...DEFAULT_TASK_REMINDER_SETTINGS, ...task.reminderSettings };
+  const hasTime = Boolean(task.time);
+  const reminderOn = hasTime && reminder.enabled;
+
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => toggleTask(task.id)}
+          className="no-tap flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
+          style={ok ? { background: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
+        >
+          {ok && <Check className="h-4 w-4 text-primary-foreground" strokeWidth={3} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-sm font-semibold ${ok ? "text-muted-foreground line-through" : ""}`}>{task.name}</p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Dot color={CATEGORY_VAR[task.category]} /> {task.category} · {task.time || "qualquer hora"}
+            <span style={{ color: PRIORITY_COLOR[task.priority] }}>· {task.priority}</span>
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing((v) => !v)}
+          className="no-tap p-1"
+          style={{ color: reminderOn ? "var(--primary)" : "var(--muted-foreground)" }}
+          aria-label="Configurar lembrete"
+        >
+          {reminderOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+        </button>
+        <button onClick={() => deleteTask(task.id)} className="no-tap p-1 text-muted-foreground">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      {editing && (
+        <div className="mt-3">
+          <ReminderEditor
+            value={reminder}
+            hasTime={hasTime}
+            onChange={(patch) => setTaskReminder(task.id, patch)}
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
 
 function AddTaskSheet({
   onClose,
