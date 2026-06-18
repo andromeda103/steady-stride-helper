@@ -581,6 +581,15 @@ export const useStore = create<State>()(
           return { tasks, history: { ...s.history, ...recomputeHistory(tasks) } };
         }),
 
+      setTaskReminder: (id, patch) =>
+        set((s) => ({
+          tasks: s.tasks.map((t) =>
+            t.id === id
+              ? { ...t, reminderSettings: { ...DEFAULT_TASK_REMINDER_SETTINGS, ...t.reminderSettings, ...patch } }
+              : t,
+          ),
+        })),
+
       toggleHabit: (id) =>
         set((s) => {
           const today = todayKey();
