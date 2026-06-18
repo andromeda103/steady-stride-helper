@@ -21,6 +21,8 @@ import {
   isNativeRuntime,
 } from "../lib/notification-service";
 import { initSync } from "../lib/sync";
+import { syncAllNotifications } from "../lib/task-notifications";
+import { useStore } from "../lib/store";
 
 function NotFoundComponent() {
   return (
@@ -139,6 +141,33 @@ function RootComponent() {
       void initializeNotificationListeners();
     }
     initSync();
+
+    // Real feature notifications (tasks + habits) — native Android only.
+    if (!isNativeRuntime()) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const runSync = () => {
+      const { tasks, habits } = useStore.getState();
+      void syncAllNotifications(tasks, habits);
+    };
+    // Initial schedule once the runtime is ready.
+    timer = setTimeout(runSync, 1500);
+
+    // Reschedule whenever tasks or habits change (complete / add / delete).
+    let prevTasks = useStore.getState().tasks;
+    let prevHabits = useStore.getState().habits;
+    const unsubscribe = useStore.subscribe((state) => {
+      if (state.tasks === prevTasks && state.habits === prevHabits) return;
+      prevTasks = state.tasks;
+      prevHabits = state.habits;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(runSync, 800);
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   return (
