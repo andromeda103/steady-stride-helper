@@ -34,6 +34,27 @@ export const CATEGORY_VAR: Record<Category, string> = {
   Pessoal: "var(--cat-pessoal)",
 };
 
+/** Per-task native reminder configuration (Android local notifications). */
+export interface TaskReminderSettings {
+  enabled: boolean;
+  beforeMinutes: 0 | 5 | 10 | 15 | 30 | 60; // 0 = no early warning
+  notifyAtTime: boolean;
+  repeatIfPending: boolean;
+  repeatIntervalMinutes: 5 | 10;
+  maxRepeatCount: number;
+  stopAfterMinutes?: number;
+}
+
+export const DEFAULT_TASK_REMINDER_SETTINGS: TaskReminderSettings = {
+  enabled: true,
+  beforeMinutes: 10,
+  notifyAtTime: true,
+  repeatIfPending: true,
+  repeatIntervalMinutes: 10,
+  maxRepeatCount: 6,
+  stopAfterMinutes: 60,
+};
+
 export interface Task {
   id: string;
   name: string;
@@ -42,6 +63,7 @@ export interface Task {
   priority: Priority;
   essential: boolean; // kept on "dia ruim"
   lastDone: string | null; // date key when last completed
+  reminderSettings?: TaskReminderSettings; // undefined = use DEFAULT_TASK_REMINDER_SETTINGS
 }
 
 export type HabitMode = "count" | "time";
@@ -296,6 +318,7 @@ interface State {
   toggleTask: (id: string) => void;
   addTask: (t: Omit<Task, "id" | "lastDone">) => void;
   deleteTask: (id: string) => void;
+  setTaskReminder: (id: string, patch: Partial<TaskReminderSettings>) => void;
   toggleHabit: (id: string) => void;
   incHabit: (id: string, delta: number) => void;
   setHabitProgress: (id: string, value: number) => void;
@@ -557,6 +580,15 @@ export const useStore = create<State>()(
           const tasks = s.tasks.filter((t) => t.id !== id);
           return { tasks, history: { ...s.history, ...recomputeHistory(tasks) } };
         }),
+
+      setTaskReminder: (id, patch) =>
+        set((s) => ({
+          tasks: s.tasks.map((t) =>
+            t.id === id
+              ? { ...t, reminderSettings: { ...DEFAULT_TASK_REMINDER_SETTINGS, ...t.reminderSettings, ...patch } }
+              : t,
+          ),
+        })),
 
       toggleHabit: (id) =>
         set((s) => {

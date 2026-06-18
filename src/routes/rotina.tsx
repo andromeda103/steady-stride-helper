@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2, Check, X, RotateCcw, Minus, Flame, Clock } from "lucide-react";
+import { Plus, Trash2, Check, X, RotateCcw, Minus, Flame, Clock, Bell, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   useStore,
@@ -9,9 +9,11 @@ import {
   CATEGORIES,
   PRIORITIES,
   CATEGORY_VAR,
+  DEFAULT_TASK_REMINDER_SETTINGS,
   type Category,
   type Priority,
   type HabitMode,
+  type TaskReminderSettings,
 } from "@/lib/store";
 import { Card, PageTitle, Dot } from "@/components/primitives";
 import { daysBetween } from "@/lib/dates";
@@ -64,8 +66,6 @@ function Rotina() {
 
 function TasksTab() {
   const tasks = useStore((s) => s.tasks);
-  const toggleTask = useStore((s) => s.toggleTask);
-  const deleteTask = useStore((s) => s.deleteTask);
   const addTask = useStore((s) => s.addTask);
   const [open, setOpen] = useState(false);
 
@@ -79,62 +79,106 @@ function TasksTab() {
       >
         <Plus className="h-4 w-4" /> Nova tarefa
       </button>
-      {sorted.map((t) => {
-        const ok = isDoneToday(t.lastDone);
-        return (
-          <Card key={t.id} className="flex items-center gap-3 p-3">
-            <button
-              onClick={() => toggleTask(t.id)}
-              className="no-tap flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
-              style={ok ? { background: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
-            >
-              {ok && <Check className="h-4 w-4 text-primary-foreground" strokeWidth={3} />}
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className={`truncate text-sm font-semibold ${ok ? "text-muted-foreground line-through" : ""}`}>{t.name}</p>
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Dot color={CATEGORY_VAR[t.category]} /> {t.category} · {t.time || "qualquer hora"}
-                <span style={{ color: PRIORITY_COLOR[t.priority] }}>· {t.priority}</span>
-              </p>
-            </div>
-            <button onClick={() => deleteTask(t.id)} className="no-tap p-1 text-muted-foreground">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </Card>
-        );
-      })}
+      {sorted.map((t) => (
+        <TaskCard key={t.id} id={t.id} />
+      ))}
       {open && <AddTaskSheet onClose={() => setOpen(false)} onAdd={addTask} />}
     </div>
   );
 }
+
+function TaskCard({ id }: { id: string }) {
+  const task = useStore((s) => s.tasks.find((t) => t.id === id));
+  const toggleTask = useStore((s) => s.toggleTask);
+  const deleteTask = useStore((s) => s.deleteTask);
+  const setTaskReminder = useStore((s) => s.setTaskReminder);
+  const [editing, setEditing] = useState(false);
+  if (!task) return null;
+
+  const ok = isDoneToday(task.lastDone);
+  const reminder = { ...DEFAULT_TASK_REMINDER_SETTINGS, ...task.reminderSettings };
+  const hasTime = Boolean(task.time);
+  const reminderOn = hasTime && reminder.enabled;
+
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => toggleTask(task.id)}
+          className="no-tap flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
+          style={ok ? { background: "var(--primary)", borderColor: "var(--primary)" } : { borderColor: "var(--border)" }}
+        >
+          {ok && <Check className="h-4 w-4 text-primary-foreground" strokeWidth={3} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-sm font-semibold ${ok ? "text-muted-foreground line-through" : ""}`}>{task.name}</p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Dot color={CATEGORY_VAR[task.category]} /> {task.category} · {task.time || "qualquer hora"}
+            <span style={{ color: PRIORITY_COLOR[task.priority] }}>· {task.priority}</span>
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing((v) => !v)}
+          className="no-tap p-1"
+          style={{ color: reminderOn ? "var(--primary)" : "var(--muted-foreground)" }}
+          aria-label="Configurar lembrete"
+        >
+          {reminderOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+        </button>
+        <button onClick={() => deleteTask(task.id)} className="no-tap p-1 text-muted-foreground">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      {editing && (
+        <div className="mt-3">
+          <ReminderEditor
+            value={reminder}
+            hasTime={hasTime}
+            onChange={(patch) => setTaskReminder(task.id, patch)}
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
 
 function AddTaskSheet({
   onClose,
   onAdd,
 }: {
   onClose: () => void;
-  onAdd: (t: { name: string; time: string; category: Category; priority: Priority; essential: boolean }) => void;
+  onAdd: (t: {
+    name: string;
+    time: string;
+    category: Category;
+    priority: Priority;
+    essential: boolean;
+    reminderSettings?: TaskReminderSettings;
+  }) => void;
 }) {
   const [name, setName] = useState("");
   const [time, setTime] = useState("");
   const [category, setCategory] = useState<Category>("Estudos");
   const [priority, setPriority] = useState<Priority>("Média");
   const [essential, setEssential] = useState(false);
+  const [reminder, setReminder] = useState<TaskReminderSettings>(DEFAULT_TASK_REMINDER_SETTINGS);
 
   function submit() {
     if (!name.trim()) {
       toast("Dê um nome à tarefa");
       return;
     }
-    onAdd({ name: name.trim(), time, category, priority, essential });
+    onAdd({ name: name.trim(), time, category, priority, essential, reminderSettings: reminder });
     toast("Tarefa criada");
     onClose();
   }
 
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-t-3xl border-t border-border bg-card p-5 pb-8"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t border-border bg-card p-5 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -183,6 +227,13 @@ function AddTaskSheet({
             <input type="checkbox" checked={essential} onChange={(e) => setEssential(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
             Essencial (mantida no modo dia ruim)
           </label>
+          <Field label="Lembrete">
+            <ReminderEditor
+              value={reminder}
+              hasTime={Boolean(time)}
+              onChange={(patch) => setReminder((r) => ({ ...r, ...patch }))}
+            />
+          </Field>
           <button onClick={submit} className="no-tap w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground">
             Criar tarefa
           </button>
@@ -212,6 +263,131 @@ function Chip({ active, color, onClick, children }: { active: boolean; color: st
     </button>
   );
 }
+
+const BEFORE_OPTIONS: { value: TaskReminderSettings["beforeMinutes"]; label: string }[] = [
+  { value: 0, label: "Não avisar" },
+  { value: 5, label: "5 min" },
+  { value: 10, label: "10 min" },
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 hora" },
+];
+
+/** Controlled editor for a task's native reminder settings. */
+function ReminderEditor({
+  value,
+  hasTime,
+  onChange,
+}: {
+  value: TaskReminderSettings;
+  hasTime: boolean;
+  onChange: (patch: Partial<TaskReminderSettings>) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background/40 p-3">
+      <label className="flex items-center justify-between text-sm font-semibold">
+        <span className="flex items-center gap-2">
+          {value.enabled ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
+          Ativar lembrete
+        </span>
+        <input
+          type="checkbox"
+          checked={value.enabled}
+          onChange={(e) => onChange({ enabled: e.target.checked })}
+          className="h-4 w-4 accent-[var(--primary)]"
+        />
+      </label>
+
+      {!hasTime && (
+        <p className="text-xs text-muted-foreground">Adicione um horário para ativar lembretes.</p>
+      )}
+
+      {value.enabled && hasTime && (
+        <>
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Avisar antes</p>
+            <div className="flex flex-wrap gap-1.5">
+              {BEFORE_OPTIONS.map((o) => (
+                <Chip
+                  key={o.value}
+                  active={value.beforeMinutes === o.value}
+                  color="var(--primary)"
+                  onClick={() => onChange({ beforeMinutes: o.value })}
+                >
+                  {o.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.notifyAtTime}
+              onChange={(e) => onChange({ notifyAtTime: e.target.checked })}
+              className="h-4 w-4 accent-[var(--primary)]"
+            />
+            Avisar no horário
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.repeatIfPending}
+              onChange={(e) => onChange({ repeatIfPending: e.target.checked })}
+              className="h-4 w-4 accent-[var(--primary)]"
+            />
+            Continuar lembrando se estiver pendente
+          </label>
+
+          {value.repeatIfPending && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div>
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Intervalo</p>
+                <div className="flex gap-1.5">
+                  {([5, 10] as const).map((iv) => (
+                    <Chip
+                      key={iv}
+                      active={value.repeatIntervalMinutes === iv}
+                      color="var(--primary)"
+                      onClick={() => onChange({ repeatIntervalMinutes: iv })}
+                    >
+                      {iv} min
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">Máx. repetições</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={48}
+                  value={value.maxRepeatCount}
+                  onChange={(e) => onChange({ maxRepeatCount: Math.max(1, Math.min(48, Number(e.target.value) || 1)) })}
+                  className="w-20 rounded-xl border border-input bg-background px-3 py-2 text-center text-sm outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">Parar após (min)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={value.stopAfterMinutes ?? 0}
+                  onChange={(e) => onChange({ stopAfterMinutes: Math.max(0, Math.min(1440, Number(e.target.value) || 0)) })}
+                  className="w-20 rounded-xl border border-input bg-background px-3 py-2 text-center text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
 
 const EMOJI_OPTIONS = ["🦷", "💧", "💊", "📚", "🍅", "✍️", "🏋️", "🥩", "🧘", "🚶", "🌙", "☀️", "❤️", "🔁", "🧠", "🛏️", "🚭", "🙏", "✅"];
 
