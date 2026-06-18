@@ -21,6 +21,8 @@ import {
   isNativeRuntime,
 } from "../lib/notification-service";
 import { initSync } from "../lib/sync";
+import { syncAllNotifications } from "../lib/task-notifications";
+import { useStore } from "../lib/store";
 
 function NotFoundComponent() {
   return (
