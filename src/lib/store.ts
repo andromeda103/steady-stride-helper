@@ -318,6 +318,7 @@ interface State {
   toggleTask: (id: string) => void;
   addTask: (t: Omit<Task, "id" | "lastDone">) => void;
   deleteTask: (id: string) => void;
+  setTaskReminder: (id: string, patch: Partial<TaskReminderSettings>) => void;
   toggleHabit: (id: string) => void;
   incHabit: (id: string, delta: number) => void;
   setHabitProgress: (id: string, value: number) => void;
