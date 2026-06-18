@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2, Check, X, RotateCcw, Minus, Flame, Clock } from "lucide-react";
+import { Plus, Trash2, Check, X, RotateCcw, Minus, Flame, Clock, Bell, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   useStore,
@@ -9,9 +9,11 @@ import {
   CATEGORIES,
   PRIORITIES,
   CATEGORY_VAR,
+  DEFAULT_TASK_REMINDER_SETTINGS,
   type Category,
   type Priority,
   type HabitMode,
+  type TaskReminderSettings,
 } from "@/lib/store";
 import { Card, PageTitle, Dot } from "@/components/primitives";
 import { daysBetween } from "@/lib/dates";
