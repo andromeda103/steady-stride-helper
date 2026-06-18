@@ -227,6 +227,13 @@ function AddTaskSheet({
             <input type="checkbox" checked={essential} onChange={(e) => setEssential(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
             Essencial (mantida no modo dia ruim)
           </label>
+          <Field label="Lembrete">
+            <ReminderEditor
+              value={reminder}
+              hasTime={Boolean(time)}
+              onChange={(patch) => setReminder((r) => ({ ...r, ...patch }))}
+            />
+          </Field>
           <button onClick={submit} className="no-tap w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground">
             Criar tarefa
           </button>
