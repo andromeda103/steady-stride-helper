@@ -178,7 +178,7 @@ function AddTaskSheet({
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-t-3xl border-t border-border bg-card p-5 pb-8"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t border-border bg-card p-5 pb-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
