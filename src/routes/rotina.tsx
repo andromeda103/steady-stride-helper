@@ -148,23 +148,32 @@ function AddTaskSheet({
   onAdd,
 }: {
   onClose: () => void;
-  onAdd: (t: { name: string; time: string; category: Category; priority: Priority; essential: boolean }) => void;
+  onAdd: (t: {
+    name: string;
+    time: string;
+    category: Category;
+    priority: Priority;
+    essential: boolean;
+    reminderSettings?: TaskReminderSettings;
+  }) => void;
 }) {
   const [name, setName] = useState("");
   const [time, setTime] = useState("");
   const [category, setCategory] = useState<Category>("Estudos");
   const [priority, setPriority] = useState<Priority>("Média");
   const [essential, setEssential] = useState(false);
+  const [reminder, setReminder] = useState<TaskReminderSettings>(DEFAULT_TASK_REMINDER_SETTINGS);
 
   function submit() {
     if (!name.trim()) {
       toast("Dê um nome à tarefa");
       return;
     }
-    onAdd({ name: name.trim(), time, category, priority, essential });
+    onAdd({ name: name.trim(), time, category, priority, essential, reminderSettings: reminder });
     toast("Tarefa criada");
     onClose();
   }
+
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
